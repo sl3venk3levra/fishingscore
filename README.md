@@ -100,8 +100,8 @@ docker run -d --name fishing-score \
   -e MQTT_BROKER=192.168.178.10 \
   -e MQTT_USER=ha \
   -e MQTT_PASS=megaSecret \
-  -e LATITUDE=47.9 \
-  -e LONGITUDE=12.5 \
+  -e LATITUDE= \
+  -e LONGITUDE= \
   -e PIRATEWEATHER_API_KEY=yourKey \
   -v fishdata:/app/data \
   --restart unless-stopped \

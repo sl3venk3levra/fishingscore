@@ -411,7 +411,10 @@ def compute_catch_probability_and_window(
             logger.debug(f"[DEBUG] Nach Halbmond (+{w}): {score}")
 
         # 7. Saison
-        saison_monate = [int(m) for m in pref.get("Beste_Fangsaison", []) if m.isdigit()]
+        saison_monate = [
+        int(m) for m in pref.get("Beste_Fangsaison", [])
+        if isinstance(m, int) or (isinstance(m, str) and m.isdigit())
+        ]
         if today.month in saison_monate:
             w = WEIGHTS.get("Saison", 0)
             score += w
