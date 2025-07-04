@@ -1,0 +1,23 @@
+{
+  "Bevorzugte_Gewichtungen": {
+  "Saison":             12,
+  "Temperatur":         10,
+  "Wassertiefe":         7,
+  "TempTiefe_Match":     13,
+  "Tageszeitfenster":   14,
+  "Nacht_Boost":         8,
+  "Luftdruck_trend":     7,
+  "Regen_Bonus":         5,
+  "Regen_Malus":         8,
+  "Bewölkung":           4,
+  "Mondphase":           6,
+  "Windrichtung":        3,
+  "Windig":              4,
+  "Trübung":             4
+  },
+  "Zeitfenster_Puffer": {
+    "Dämmerung": 45,
+    "Tag":       30,
+    "Nacht":     30
+  }
+}

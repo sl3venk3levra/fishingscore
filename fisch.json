@@ -1,0 +1,1505 @@
+[
+  {
+    "Art": "Hecht",
+    "Bevorzugte_Wassertemperatur": [
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18"
+    ],
+    "Erweiterter_Wassertemperaturbereich": [
+      "10",
+      "11",
+      "19",
+      "20",
+      "21",
+      "22"
+    ],
+    "Bevorzugte_Wassertiefe_Frühling_Herbst": [
+      "1",
+      "2",
+      "3"
+    ],
+    "Bevorzugte_Wassertiefe_Sommer": [
+      "3",
+      "4",
+      "5",
+      "6"
+    ],
+    "Bevorzugte_Tageszeit": [
+      "Morgen",
+      "Abend"
+    ],
+    "Bevorzugte_Wetter": [
+      "wechselhaft",
+      "bewölkt",
+      "windig"
+    ],
+    "Bevorzugte_Windrichtung": [
+      "SW",
+      "W"
+    ],
+    "Bevorzugter_Luftdrucktrend": [
+      "stabil",
+      "leicht fallend"
+    ],
+    "Bevorzugte_Mondphase": [
+      "Neumond",
+      "Vollmond"
+    ],
+    "Beste_Fangsaison": [
+      "3",
+      "4",
+      "5",
+      "9",
+      "10",
+      "11"
+    ],
+    "Beutesituation": [
+      "Kleinfischschwarm",
+      "Krautkante",
+      "Hinderniszone"
+    ],
+    "Jahreszeit_Verhalten": {
+      "Frühling": "flach, aggressiv nach Laich",
+      "Sommer": "tiefer, träge bei Hitze",
+      "Herbst": "fressgierig, räuberisch aktiv"
+    },
+    "Trübung": [
+      "klar",
+      "leicht trüb"
+    ],
+    "Weitere_Faktoren": [
+      "Kälteeinbruch vermindert Aktivität",
+      "Hitzewellen = Rückzug in Tiefe",
+      "Windkanten = bevorzugte Jagdzonen"
+    ]
+  },
+  {
+    "Art": "Zander",
+    "Bevorzugte_Wassertemperatur": [
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18"
+    ],
+    "Erweiterter_Wassertemperaturbereich": [
+      "19",
+      "20",
+      "21",
+      "22"
+    ],
+    "Bevorzugte_Wassertiefe_Frühling_Herbst": [
+      "1",
+      "2",
+      "3"
+    ],
+    "Bevorzugte_Wassertiefe_Sommer": [
+      "3",
+      "4",
+      "5",
+      "6"
+    ],
+    "Bevorzugte_Tageszeit": [
+      "Morgen",
+      "Abend",
+      "Nacht"
+    ],
+    "Bevorzugte_Wetter": [
+      "wechselhaft",
+      "bewölkt",
+      "windig"
+    ],
+    "Bevorzugte_Windrichtung": [
+      "SW",
+      "W"
+    ],
+    "Bevorzugter_Luftdrucktrend": [
+      "stabil",
+      "leicht fallend"
+    ],
+    "Bevorzugte_Mondphase": [
+      "Neumond",
+      "Vollmond"
+    ],
+    "Beste_Fangsaison": [
+      "3",
+      "4",
+      "5",
+      "6",
+      "9",
+      "10",
+      "11"
+    ],
+    "Beutesituation": [
+      "Kleinfischschwarm",
+      "Ufer",
+      "Krautkante"
+    ],
+    "Jahreszeit_Verhalten": {
+      "Frühling": "flach",
+      "Sommer": "tief und träge",
+      "Herbst": "raubgierig"
+    },
+    "Trübung": [
+      "leicht trüb"
+    ],
+    "Weitere_Faktoren": [
+      "Kälteeinbruch vermindert Aktivität"
+    ]
+  },
+  {
+    "Art": "Aal",
+    "Bevorzugte_Wassertemperatur": [
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18"
+    ],
+    "Erweiterter_Wassertemperaturbereich": [
+      "10",
+      "11",
+      "19"
+    ],
+    "Bevorzugte_Wassertiefe_Frühling_Herbst": [
+      "5",
+      "6",
+      "7"
+    ],
+    "Bevorzugte_Wassertiefe_Sommer": [
+      "6",
+      "7",
+      "8",
+      "9",
+      "10"
+    ],
+    "Bevorzugte_Tageszeit": [
+      "Dämmerung",
+      "Nacht"
+    ],
+    "Bevorzugte_Wetter": [
+      "bewölkt",
+      "regen",
+      "wechselhaft"
+    ],
+    "Bevorzugte_Windrichtung": [
+      "SW",
+      "W"
+    ],
+    "Bevorzugter_Luftdrucktrend": [
+      "stabil",
+      "fallend"
+    ],
+    "Bevorzugte_Mondphase": [
+      "Neumond",
+      "Halbmond"
+    ],
+    "Beste_Fangsaison": [
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10"
+    ],
+    "Beutesituation": [
+      "Grundnah",
+      "Schlammzone",
+      "Krautbereich"
+    ],
+    "Jahreszeit_Verhalten": {
+      "Frühling": "aktiv bei steigenden Temperaturen",
+      "Sommer": "hochaktiv bei Gewitter und Hitze",
+      "Herbst": "vermehrt aktiv vor Abwanderung"
+    },
+    "Trübung": [
+      "trüb",
+      "leicht trüb"
+    ],
+    "Weitere_Faktoren": [
+      "Nachtaktivität",
+      "Gewitter aktiviert Bissverhalten",
+      "Lichtempfindlich – starke Lichtvermeidung"
+    ]
+  },
+  {
+    "Art": "Flussbarsch",
+    "Bevorzugte_Wassertemperatur": [
+      "18",
+      "19",
+      "20",
+      "21",
+      "22"
+    ],
+    "Erweiterter_Wassertemperaturbereich": [
+      "14",
+      "15",
+      "16",
+      "17",
+      "23",
+      "24",
+      "25"
+    ],
+    "Bevorzugte_Wassertiefe_Frühling_Herbst": [
+      "1",
+      "2",
+      "3",
+      "4"
+    ],
+    "Bevorzugte_Wassertiefe_Sommer": [
+      "4",
+      "5",
+      "6",
+      "7",
+      "8"
+    ],
+    "Bevorzugte_Tageszeit": [
+      "Morgen",
+      "Dämmerung",
+      "Abend"
+    ],
+    "Bevorzugte_Wetter": [
+      "bewölkt",
+      "windig"
+    ],
+    "Bevorzugte_Windrichtung": [
+      "SW",
+      "W"
+    ],
+    "Bevorzugter_Luftdrucktrend": [
+      "stabil",
+      "leicht fallend"
+    ],
+    "Bevorzugte_Mondphase": [
+      "Neumond",
+      "Vollmond",
+      "Halbmond"
+    ],
+    "Beste_Fangsaison": [
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10"
+    ],
+    "Beutesituation": [
+      "Kleinfischschwarm",
+      "Ufer",
+      "Krautkante",
+      "Steganlagen"
+    ],
+    "Jahreszeit_Verhalten": {
+      "Frühling": "trifft sich in Laichschwärmen flach",
+      "Sommer": "tiefer tagsüber, flach morgens/abends",
+      "Herbst": "folgt Kleinfischschwärmen aggressiv"
+    },
+    "Trübung": [
+      "klar",
+      "leicht trüb"
+    ],
+    "Weitere_Faktoren": [
+      "Temperatursprung (Thermokline) wichtig im Sommer"
+    ]
+  },
+  {
+    "Art": "Wels",
+    "Bevorzugte_Wassertemperatur": [
+      "20",
+      "21",
+      "22",
+      "23",
+      "24",
+      "25",
+      "26"
+    ],
+    "Erweiterter_Wassertemperaturbereich": [
+      "18",
+      "19",
+      "27",
+      "28",
+      "29",
+      "30"
+    ],
+    "Bevorzugte_Wassertiefe_Frühling_Herbst": [
+      "3",
+      "4",
+      "5",
+      "6"
+    ],
+    "Bevorzugte_Wassertiefe_Sommer": [
+      "6",
+      "7",
+      "8",
+      "9",
+      "10"
+    ],
+    "Bevorzugte_Tageszeit": [
+      "Dämmerung",
+      "Nacht"
+    ],
+    "Bevorzugte_Wetter": [
+      "klar",
+      "bewölkt",
+      "wechselhaft"
+    ],
+    "Bevorzugte_Windrichtung": [
+      "S",
+      "SW",
+      "W"
+    ],
+    "Bevorzugter_Luftdrucktrend": [
+      "stabil",
+      "leicht fallend"
+    ],
+    "Bevorzugte_Mondphase": [
+      "Neumond"
+    ],
+    "Beste_Fangsaison": [
+      "5",
+      "6",
+      "7",
+      "8",
+      "9"
+    ],
+    "Beutesituation": [
+      "Grundnah",
+      "Totholz",
+      "Steilabfall",
+      "Kraut"
+    ],
+    "Jahreszeit_Verhalten": {
+      "Frühling": "wandert flachere Buchten an wärmeren Tagen",
+      "Sommer": "aktiv bei Nacht in Tiefe oder Flachwasser",
+      "Herbst": "frisst sich Reserven an, eher tiefer"
+    },
+    "Trübung": [
+      "leicht trüb",
+      "trüb"
+    ],
+    "Weitere_Faktoren": [
+      "Sehr lichtscheu",
+      "Gewitterfront kann Beissfenster öffnen"
+    ]
+  },
+  {
+    "Art": "Karpfen",
+    "Bevorzugte_Wassertemperatur": [
+      "20",
+      "21",
+      "22",
+      "23",
+      "24",
+      "25"
+    ],
+    "Erweiterter_Wassertemperaturbereich": [
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "26",
+      "27",
+      "28",
+      "29"
+    ],
+    "Bevorzugte_Wassertiefe_Frühling_Herbst": [
+      "1",
+      "2",
+      "3"
+    ],
+    "Bevorzugte_Wassertiefe_Sommer": [
+      "1",
+      "2",
+      "3",
+      "4"
+    ],
+    "Bevorzugte_Tageszeit": [
+      "Morgen",
+      "Abend",
+      "Nacht"
+    ],
+    "Bevorzugte_Wetter": [
+      "klar",
+      "bewölkt",
+      "wechselhaft"
+    ],
+    "Bevorzugte_Windrichtung": [
+      "SW",
+      "W"
+    ],
+    "Bevorzugter_Luftdrucktrend": [
+      "stabil",
+      "leicht fallend"
+    ],
+    "Bevorzugte_Mondphase": [
+      "Neumond",
+      "Vollmond",
+      "Halbmond"
+    ],
+    "Beste_Fangsaison": [
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10"
+    ],
+    "Beutesituation": [
+      "Schlammzone",
+      "Kraut",
+      "Flachwasser",
+      "Futterplatz"
+    ],
+    "Jahreszeit_Verhalten": {
+      "Frühling": "wandert in flache, schnell erwärmte Bereiche",
+      "Sommer": "aktiv in warmem Wasser, Nachtfütterung",
+      "Herbst": "Kalorienaufnahme in tieferen Gruben"
+    },
+    "Trübung": [
+      "trüb",
+      "leicht trüb"
+    ],
+    "Weitere_Faktoren": [
+      "Luftdruckabfall fördert Oberflächenfütterung"
+    ]
+  },
+  {
+    "Art": "Brachse",
+    "Bevorzugte_Wassertemperatur": [
+      "18",
+      "19",
+      "20",
+      "21",
+      "22"
+    ],
+    "Erweiterter_Wassertemperaturbereich": [
+      "16",
+      "17",
+      "23",
+      "24"
+    ],
+    "Bevorzugte_Wassertiefe_Frühling_Herbst": [
+      "2",
+      "3",
+      "4"
+    ],
+    "Bevorzugte_Wassertiefe_Sommer": [
+      "3",
+      "4",
+      "5",
+      "6"
+    ],
+    "Bevorzugte_Tageszeit": [
+      "Morgen",
+      "Abend"
+    ],
+    "Bevorzugte_Wetter": [
+      "bewölkt",
+      "klar"
+    ],
+    "Bevorzugte_Windrichtung": [
+      "SW",
+      "W"
+    ],
+    "Bevorzugter_Luftdrucktrend": [
+      "stabil",
+      "leicht fallend"
+    ],
+    "Bevorzugte_Mondphase": [
+      "Neumond",
+      "Vollmond"
+    ],
+    "Beste_Fangsaison": [
+      "5",
+      "6",
+      "7",
+      "8",
+      "9"
+    ],
+    "Beutesituation": [
+      "Schlammzone",
+      "Futterplatz",
+      "Flussrinnen"
+    ],
+    "Jahreszeit_Verhalten": {
+      "Frühling": "Laichschwärmen flach",
+      "Sommer": "in tieferen Gruben tagsüber",
+      "Herbst": "zieht tiefer, sucht Futter"
+    },
+    "Trübung": [
+      "trüb"
+    ],
+    "Weitere_Faktoren": [
+      "ruhige Wasserabschnitte bevorzugt"
+    ]
+  },
+  {
+    "Art": "Schleie",
+    "Bevorzugte_Wassertemperatur": [
+      "18",
+      "19",
+      "20",
+      "21",
+      "22",
+      "23",
+      "24"
+    ],
+    "Erweiterter_Wassertemperaturbereich": [
+      "15",
+      "16",
+      "17",
+      "25"
+    ],
+    "Bevorzugte_Wassertiefe_Frühling_Herbst": [
+      "1",
+      "2",
+      "3"
+    ],
+    "Bevorzugte_Wassertiefe_Sommer": [
+      "2",
+      "3",
+      "4",
+      "5"
+    ],
+    "Bevorzugte_Tageszeit": [
+      "Morgen",
+      "Abend",
+      "Nacht"
+    ],
+    "Bevorzugte_Wetter": [
+      "klar",
+      "bewölkt",
+      "wechselhaft"
+    ],
+    "Bevorzugte_Windrichtung": [
+      "SW",
+      "W"
+    ],
+    "Bevorzugter_Luftdrucktrend": [
+      "stabil",
+      "leicht fallend"
+    ],
+    "Bevorzugte_Mondphase": [
+      "Neumond",
+      "Vollmond"
+    ],
+    "Beste_Fangsaison": [
+      "5",
+      "6",
+      "7",
+      "8",
+      "9"
+    ],
+    "Beutesituation": [
+      "Kraut",
+      "Schlamm",
+      "Seerosenfelder"
+    ],
+    "Jahreszeit_Verhalten": {
+      "Frühling": "zieht in erwärmte Buchten",
+      "Sommer": "nahe Kraut an warmen Tagen",
+      "Herbst": "zieht tiefer in Schlammzonen"
+    },
+    "Trübung": [
+      "trüb",
+      "leicht trüb"
+    ],
+    "Weitere_Faktoren": [
+      "vorsichtige Bisse, feine Montage wichtig"
+    ]
+  },
+  {
+    "Art": "Rotauge",
+    "Bevorzugte_Wassertemperatur": [
+      "18",
+      "19",
+      "20",
+      "21",
+      "22",
+      "23"
+    ],
+    "Erweiterter_Wassertemperaturbereich": [
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "24"
+    ],
+    "Bevorzugte_Wassertiefe_Frühling_Herbst": [
+      "1",
+      "2",
+      "3"
+    ],
+    "Bevorzugte_Wassertiefe_Sommer": [
+      "2",
+      "3",
+      "4",
+      "5"
+    ],
+    "Bevorzugte_Tageszeit": [
+      "Tag",
+      "Morgen",
+      "Dämmerung"
+    ],
+    "Bevorzugte_Wetter": [
+      "klar",
+      "bewölkt"
+    ],
+    "Bevorzugte_Windrichtung": [
+      "alle"
+    ],
+    "Bevorzugter_Luftdrucktrend": [
+      "stabil"
+    ],
+    "Bevorzugte_Mondphase": [
+      "alle"
+    ],
+    "Beste_Fangsaison": [
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10"
+    ],
+    "Beutesituation": [
+      "Schwarmbildung",
+      "mittlere Wasserschicht"
+    ],
+    "Jahreszeit_Verhalten": {
+      "Frühling": "Laichschwarm in Ufervegetation",
+      "Sommer": "im Freiwasser mittlere Tiefe",
+      "Herbst": "Sucht tieferes Wasser"
+    },
+    "Trübung": [
+      "klar",
+      "leicht trüb"
+    ],
+    "Weitere_Faktoren": [
+      "Plötzliche Temperaturstürze verringern Beissbereitschaft"
+    ]
+  },
+  {
+    "Art": "Rotfeder",
+    "Bevorzugte_Wassertemperatur": [
+      "18",
+      "19",
+      "20",
+      "21",
+      "22",
+      "23",
+      "24"
+    ],
+    "Erweiterter_Wassertemperaturbereich": [
+      "15",
+      "16",
+      "17",
+      "25"
+    ],
+    "Bevorzugte_Wassertiefe_Frühling_Herbst": [
+      "0.5",
+      "1",
+      "1.5"
+    ],
+    "Bevorzugte_Wassertiefe_Sommer": [
+      "1",
+      "2",
+      "3"
+    ],
+    "Bevorzugte_Tageszeit": [
+      "Morgen",
+      "Abend"
+    ],
+    "Bevorzugte_Wetter": [
+      "klar",
+      "bewölkt"
+    ],
+    "Bevorzugte_Windrichtung": [
+      "alle"
+    ],
+    "Bevorzugter_Luftdrucktrend": [
+      "stabil"
+    ],
+    "Bevorzugte_Mondphase": [
+      "alle"
+    ],
+    "Beste_Fangsaison": [
+      "5",
+      "6",
+      "7",
+      "8",
+      "9"
+    ],
+    "Beutesituation": [
+      "Oberflächennahe Schwärme",
+      "Kraut"
+    ],
+    "Jahreszeit_Verhalten": {
+      "Frühling": "zieht in flache, pflanzenreiche Zonen",
+      "Sommer": "oberflächennahe Nahrungssuche",
+      "Herbst": "folgt tiefer werdenden Schwärmen"
+    },
+    "Trübung": [
+      "klar"
+    ],
+    "Weitere_Faktoren": [
+      "lichtliebend – bei Sonne aktiv"
+    ]
+  },
+  {
+    "Art": "Döbel",
+    "Bevorzugte_Wassertemperatur": [
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20"
+    ],
+    "Erweiterter_Wassertemperaturbereich": [
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "21",
+      "22"
+    ],
+    "Bevorzugte_Wassertiefe_Frühling_Herbst": [
+      "1",
+      "2",
+      "3"
+    ],
+    "Bevorzugte_Wassertiefe_Sommer": [
+      "1",
+      "2",
+      "3",
+      "4"
+    ],
+    "Bevorzugte_Tageszeit": [
+      "Morgen",
+      "Abend"
+    ],
+    "Bevorzugte_Wetter": [
+      "klar",
+      "bewölkt"
+    ],
+    "Bevorzugte_Windrichtung": [
+      "alle"
+    ],
+    "Bevorzugter_Luftdrucktrend": [
+      "stabil"
+    ],
+    "Bevorzugte_Mondphase": [
+      "alle"
+    ],
+    "Beste_Fangsaison": [
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10"
+    ],
+    "Beutesituation": [
+      "Oberflächeninsekten",
+      "Unterspülte Äste"
+    ],
+    "Jahreszeit_Verhalten": {
+      "Frühling": "aktiv unter Oberflächenströmungen",
+      "Sommer": "sucht Schattenplätze",
+      "Herbst": "folgt Strömungskanten"
+    },
+    "Trübung": [
+      "klar"
+    ],
+    "Weitere_Faktoren": [
+      "scheu – feine Köderpräsentation"
+    ]
+  },
+  {
+    "Art": "Nase",
+    "Bevorzugte_Wassertemperatur": [
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20"
+    ],
+    "Erweiterter_Wassertemperaturbereich": [
+      "12",
+      "13",
+      "14",
+      "21",
+      "22"
+    ],
+    "Bevorzugte_Wassertiefe_Frühling_Herbst": [
+      "1",
+      "2",
+      "3"
+    ],
+    "Bevorzugte_Wassertiefe_Sommer": [
+      "2",
+      "3",
+      "4"
+    ],
+    "Bevorzugte_Tageszeit": [
+      "ganztägig"
+    ],
+    "Bevorzugte_Wetter": [
+      "klar"
+    ],
+    "Bevorzugte_Windrichtung": [
+      "alle"
+    ],
+    "Bevorzugter_Luftdrucktrend": [
+      "stabil"
+    ],
+    "Bevorzugte_Mondphase": [
+      "alle"
+    ],
+    "Beste_Fangsaison": [
+      "4",
+      "5",
+      "6",
+      "7",
+      "8"
+    ],
+    "Beutesituation": [
+      "Grundnah auf Kies",
+      "Strömungskanten"
+    ],
+    "Jahreszeit_Verhalten": {
+      "Frühling": "Laichwanderung in flachen Kiesbereichen",
+      "Sommer": "halte sich in starker Strömung",
+      "Herbst": "zieht tiefer"
+    },
+    "Trübung": [
+      "klar"
+    ],
+    "Weitere_Faktoren": [
+      "strömungsliebend"
+    ]
+  },
+  {
+    "Art": "Güster",
+    "Bevorzugte_Wassertemperatur": [
+      "18",
+      "19",
+      "20",
+      "21",
+      "22"
+    ],
+    "Erweiterter_Wassertemperaturbereich": [
+      "15",
+      "16",
+      "17",
+      "23",
+      "24"
+    ],
+    "Bevorzugte_Wassertiefe_Frühling_Herbst": [
+      "2",
+      "3",
+      "4"
+    ],
+    "Bevorzugte_Wassertiefe_Sommer": [
+      "3",
+      "4",
+      "5"
+    ],
+    "Bevorzugte_Tageszeit": [
+      "Morgen",
+      "Abend"
+    ],
+    "Bevorzugte_Wetter": [
+      "bewölkt",
+      "klar"
+    ],
+    "Bevorzugte_Windrichtung": [
+      "SW",
+      "W"
+    ],
+    "Bevorzugter_Luftdrucktrend": [
+      "stabil"
+    ],
+    "Bevorzugte_Mondphase": [
+      "alle"
+    ],
+    "Beste_Fangsaison": [
+      "5",
+      "6",
+      "7",
+      "8",
+      "9"
+    ],
+    "Beutesituation": [
+      "Schwarm",
+      "Schlammzone"
+    ],
+    "Jahreszeit_Verhalten": {
+      "Frühling": "Laichzug in Flachwasser",
+      "Sommer": "tagaktiv in mittlerer Tiefe",
+      "Herbst": "Schwarmbildung in tieferen Gruben"
+    },
+    "Trübung": [
+      "trüb"
+    ],
+    "Weitere_Faktoren": [
+      "ruhige Bedingungen bevorzugt"
+    ]
+  },
+  {
+  "Art": "Renken",
+  "Bevorzugte_Wassertemperatur": [
+    "2",
+    "3",
+    "4",
+    "5",
+    "6"
+  ],
+  "Erweiterter_Wassertemperaturbereich": [
+    "1",
+    "7",
+    "8",
+    "9",
+    "10"
+  ],
+  "Bevorzugte_Wassertiefe_Frühling_Herbst": [
+    "15",
+    "20",
+    "25",
+    "30"
+  ],
+  "Bevorzugte_Wassertiefe_Sommer": [
+    "30",
+    "40",
+    "50",
+    "60",
+    "70"
+  ],
+  "Bevorzugte_Tageszeit": [
+    "Morgen",
+    "Abend"
+  ],
+  "Bevorzugte_Wetter": [
+    "bewölkt",
+    "wechselhaft"
+  ],
+  "Bevorzugte_Windrichtung": [
+    "alle"
+  ],
+  "Bevorzugter_Luftdrucktrend": [
+    "stabil",
+    "steigend"
+  ],
+  "Bevorzugte_Mondphase": [
+    "alle"
+  ],
+  "Beste_Fangsaison": [
+    "5",
+    "6",
+    "7",
+    "8",
+    "9"
+  ],
+  "Beutesituation": [
+    "Plankton",
+    "Kleinkrebse (z.B. Mysis relicta)"
+  ],
+  "Jahreszeit_Verhalten": {
+    "Frühling": "jagen in mittleren Tiefen bei wieder einsetzender Durchmischung",
+    "Sommer": "konzentriert unterhalb der Metalimniongrenze",
+    "Herbst": "wieder wandernd im gesamten Wasserkörper auf Nahrungssuche"
+  },
+  "Trübung": [
+    "klar"
+  ],
+  "Weitere_Faktoren": [
+    "empfindlich gegenüber Sauerstoffmangel",
+    "sensibel bei schnellen Temperaturschwankungen"
+  ],
+  "Beste_Fangtiefe": [
+    {
+      "Jahreszeit": "Frühling",
+      "Wassertemperatur": ["3","6"],
+      "Wetter": ["bewölkt","kühl"],
+      "Tiefe": ["15","25"]
+    },
+    {
+      "Jahreszeit": "Sommer",
+      "Wassertemperatur": ["2","6"],
+      "Wetter": ["leichte Brise","bewölkt"],
+      "Tiefe": ["30","50"]
+    },
+    {
+      "Jahreszeit": "Herbst",
+      "Wassertemperatur": ["3","6"],
+      "Wetter": ["bewölkt","leichter Regen"],
+      "Tiefe": ["20","30"]
+    }
+  ]
+},
+  {
+    "Art": "Seesaibling",
+    "Bevorzugte_Wassertemperatur": [
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "Erweiterter_Wassertemperaturbereich": [
+      "2",
+      "3",
+      "13",
+      "14",
+      "15",
+      "16"
+    ],
+    "Bevorzugte_Wassertiefe_Frühling_Herbst": [
+      "6",
+      "8",
+      "10"
+    ],
+    "Bevorzugte_Wassertiefe_Sommer": [
+      "12",
+      "15",
+      "18",
+      "20"
+    ],
+    "Bevorzugte_Tageszeit": [
+      "Morgen"
+    ],
+    "Bevorzugte_Wetter": [
+      "klar"
+    ],
+    "Bevorzugte_Windrichtung": [
+      "alle"
+    ],
+    "Bevorzugter_Luftdrucktrend": [
+      "stabil"
+    ],
+    "Bevorzugte_Mondphase": [
+      "alle"
+    ],
+    "Beste_Fangsaison": [
+      "5",
+      "6",
+      "7",
+      "8",
+      "9"
+    ],
+    "Beutesituation": [
+      "Freiwasser",
+      "Insekten-Larven"
+    ],
+    "Jahreszeit_Verhalten": {
+      "Frühling": "folgt Schulen kleiner Fische",
+      "Sommer": "bleibt in kühler Tiefenschicht",
+      "Herbst": "Laichvorbereitung"
+    },
+    "Trübung": [
+      "klar"
+    ],
+    "Weitere_Faktoren": [
+      "sehr kälteaffin – ab >13°C weniger aktiv"
+    ]
+  },
+  {
+    "Art": "Seeforelle",
+    "Bevorzugte_Wassertemperatur": [
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16"
+    ],
+    "Erweiterter_Wassertemperaturbereich": [
+      "5",
+      "6",
+      "7",
+      "17",
+      "18"
+    ],
+    "Bevorzugte_Wassertiefe_Frühling_Herbst": [
+      "3",
+      "4",
+      "5",
+      "6"
+    ],
+    "Bevorzugte_Wassertiefe_Sommer": [
+      "6",
+      "8",
+      "10",
+      "12"
+    ],
+    "Bevorzugte_Tageszeit": [
+      "Morgen",
+      "Abend"
+    ],
+    "Bevorzugte_Wetter": [
+      "bewölkt",
+      "wechselhaft"
+    ],
+    "Bevorzugte_Windrichtung": [
+      "alle"
+    ],
+    "Bevorzugter_Luftdrucktrend": [
+      "stabil"
+    ],
+    "Bevorzugte_Mondphase": [
+      "alle"
+    ],
+    "Beste_Fangsaison": [
+      "3",
+      "4",
+      "5",
+      "6",
+      "9",
+      "10",
+      "11"
+    ],
+    "Beutesituation": [
+      "Freiwasser",
+      "Beutefischschwärme",
+      "Uferzone bei Dämmerung"
+    ],
+    "Jahreszeit_Verhalten": {
+      "Frühling": "nähern sich Ufer zur Jagd",
+      "Sommer": "in tieferer, kühler Schicht",
+      "Herbst": "laichvorbereitende Wanderung"
+    },
+    "Trübung": [
+      "klar"
+    ],
+    "Weitere_Faktoren": [
+      "lichtempfindlich – bevorzugt Dämmerung"
+    ]
+  },
+  {
+    "Art": "Regenbogenforelle",
+    "Bevorzugte_Wassertemperatur": [
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "19"
+    ],
+    "Erweiterter_Wassertemperaturbereich": [
+      "10",
+      "11",
+      "12",
+      "20",
+      "21",
+      "22"
+    ],
+    "Bevorzugte_Wassertiefe_Frühling_Herbst": [
+      "2",
+      "3",
+      "4"
+    ],
+    "Bevorzugte_Wassertiefe_Sommer": [
+      "4",
+      "5",
+      "6",
+      "7"
+    ],
+    "Bevorzugte_Tageszeit": [
+      "Morgen",
+      "Abend"
+    ],
+    "Bevorzugte_Wetter": [
+      "klar",
+      "bewölkt"
+    ],
+    "Bevorzugte_Windrichtung": [
+      "alle"
+    ],
+    "Bevorzugter_Luftdrucktrend": [
+      "stabil"
+    ],
+    "Bevorzugte_Mondphase": [
+      "alle"
+    ],
+    "Beste_Fangsaison": [
+      "3",
+      "4",
+      "5",
+      "6",
+      "9",
+      "10",
+      "11"
+    ],
+    "Beutesituation": [
+      "Oberflächeninsekten",
+      "Nymphen",
+      "Beutefischchen"
+    ],
+    "Jahreszeit_Verhalten": {
+      "Frühling": "aktiv an Oberflächeninsekten",
+      "Sommer": "tiefer bei Hitze",
+      "Herbst": "futtern vor Winter"
+    },
+    "Trübung": [
+      "klar"
+    ],
+    "Weitere_Faktoren": [
+      "pflückt oft Insekten von Oberfläche"
+    ]
+  },
+  {
+    "Art": "Rapfen",
+    "Bevorzugte_Wassertemperatur": [
+      "18",
+      "19",
+      "20",
+      "21",
+      "22"
+    ],
+    "Erweiterter_Wassertemperaturbereich": [
+      "15",
+      "16",
+      "17",
+      "23",
+      "24"
+    ],
+    "Bevorzugte_Wassertiefe_Frühling_Herbst": [
+      "0.5",
+      "1",
+      "2"
+    ],
+    "Bevorzugte_Wassertiefe_Sommer": [
+      "1",
+      "2",
+      "3"
+    ],
+    "Bevorzugte_Tageszeit": [
+      "Morgen",
+      "Abend",
+      "Nacht"
+    ],
+    "Bevorzugte_Wetter": [
+      "bewölkt",
+      "wechselhaft"
+    ],
+    "Bevorzugte_Windrichtung": [
+      "alle"
+    ],
+    "Bevorzugter_Luftdrucktrend": [
+      "stabil",
+      "leicht fallend"
+    ],
+    "Bevorzugte_Mondphase": [
+      "alle"
+    ],
+    "Beste_Fangsaison": [
+      "5",
+      "6",
+      "7",
+      "8",
+      "9"
+    ],
+    "Beutesituation": [
+      "Oberflächenraubzüge",
+      "Strömungskanten"
+    ],
+    "Jahreszeit_Verhalten": {
+      "Frühling": "frisst aktiv nach Laich",
+      "Sommer": "oberflächennah in Strömung",
+      "Herbst": "aggressive Jagd auf Kleinfisch"
+    },
+    "Trübung": [
+      "klar",
+      "leicht trüb"
+    ],
+    "Weitere_Faktoren": [
+      "strömungsliebend"
+    ]
+  },
+  {
+    "Art": "Rutte",
+    "Bevorzugte_Wassertemperatur": [
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12"
+    ],
+    "Erweiterter_Wassertemperaturbereich": [
+      "1",
+      "2",
+      "3",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18"
+    ],
+    "Bevorzugte_Wassertiefe_Frühling_Herbst": [
+      "5",
+      "6",
+      "7",
+      "8"
+    ],
+    "Bevorzugte_Wassertiefe_Sommer": [
+      "8",
+      "10",
+      "12",
+      "15"
+    ],
+    "Bevorzugte_Tageszeit": [
+      "Nacht"
+    ],
+    "Bevorzugte_Wetter": [
+      "klar",
+      "bewölkt"
+    ],
+    "Bevorzugte_Windrichtung": [
+      "alle"
+    ],
+    "Bevorzugter_Luftdrucktrend": [
+      "stabil",
+      "fallend"
+    ],
+    "Bevorzugte_Mondphase": [
+      "Neumond"
+    ],
+    "Beste_Fangsaison": [
+      "11",
+      "12",
+      "1",
+      "2"
+    ],
+    "Beutesituation": [
+      "Grundnah",
+      "Steinpackungen"
+    ],
+    "Jahreszeit_Verhalten": {
+      "Winter": "Laichzeit und hohe Aktivität",
+      "Sommer": "versteckt und inaktiv",
+      "Herbst": "zunehmend aktiv"
+    },
+    "Trübung": [
+      "klar",
+      "leicht trüb"
+    ],
+    "Weitere_Faktoren": [
+      "kälteaffin – aktiv unter 12°C"
+    ]
+  },
+  {
+    "Art": "Kaulbarsch",
+    "Bevorzugte_Wassertemperatur": [
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20"
+    ],
+    "Erweiterter_Wassertemperaturbereich": [
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "21",
+      "22",
+      "23",
+      "24",
+      "25"
+    ],
+    "Bevorzugte_Wassertiefe_Frühling_Herbst": [
+      "2",
+      "3",
+      "4"
+    ],
+    "Bevorzugte_Wassertiefe_Sommer": [
+      "4",
+      "5",
+      "6"
+    ],
+    "Bevorzugte_Tageszeit": [
+      "Nacht",
+      "Morgen"
+    ],
+    "Bevorzugte_Wetter": [
+      "bewölkt",
+      "wechselhaft"
+    ],
+    "Bevorzugte_Windrichtung": [
+      "alle"
+    ],
+    "Bevorzugter_Luftdrucktrend": [
+      "stabil"
+    ],
+    "Bevorzugte_Mondphase": [
+      "alle"
+    ],
+    "Beste_Fangsaison": [
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9"
+    ],
+    "Beutesituation": [
+      "Grundnah",
+      "Kies",
+      "Sand"
+    ],
+    "Jahreszeit_Verhalten": {
+      "Frühling": "Laicht flach auf hartem Grund",
+      "Sommer": "nachtaktiv auf Futtersuche",
+      "Herbst": "zieht tiefer"
+    },
+    "Trübung": [
+      "leicht trüb",
+      "trüb"
+    ],
+    "Weitere_Faktoren": [
+      "leichte Beute im Lichtkegel"
+    ]
+  }
+]

@@ -1,0 +1,114 @@
+# =============================================================
+# mqtt.py – FISCHIS MQTT-Publisher (mit % Fangwahrscheinlichkeit als State)
+# =============================================================
+
+import os
+import time
+import logging
+import json
+from typing import Dict, Any
+
+from dotenv import load_dotenv
+import paho.mqtt.client as mqtt
+from sensor_berechnung import main as load_and_process
+from logging_config import setup_logging
+
+# ─ Logging initialisieren
+setup_logging()
+log = logging.getLogger(__name__)
+
+# ─ .env laden
+load_dotenv()
+
+# ─ MQTT-Einstellungen
+BROKER         = os.getenv("MQTT_BROKER") or "127.0.0.1"
+PORT           = int(os.getenv("MQTT_PORT") or "1883")
+USER           = os.getenv("MQTT_USER")
+PASSWORD       = os.getenv("MQTT_PASS")
+DISCOVERY_ROOT = os.getenv("MQTT_DISCOVERY_PREFIX", "homeassistant")
+BASE_TOPIC     = f"{DISCOVERY_ROOT}/sensor/fisch"
+LOOP_INTERVAL  = int(os.getenv("LOOP_INTERVAL") or "600")
+
+log.debug("→ Verbinde zu MQTT-Broker %r:%s", BROKER, PORT)
+
+# ─ MQTT-Client initialisieren (MQTT v5 + Callback API v2)
+client = mqtt.Client(
+    protocol=mqtt.MQTTv5,
+    callback_api_version=mqtt.CallbackAPIVersion.VERSION2
+)
+if USER:
+    client.username_pw_set(USER, PASSWORD)
+
+# ─ Callback-Handler für v2
+def on_connect(client, userdata, flags, reason_code, properties):
+    if reason_code == 0:
+        log.info("✅ Verbunden mit MQTT-Broker %s:%s", BROKER, PORT)
+    else:
+        log.error("❌ Verbindung fehlgeschlagen zu %s:%s (Reason: %s)", BROKER, PORT, reason_code)
+def on_publish(client, userdata, mid, reason_code, properties):
+    if reason_code == 0:
+        log.debug("→ Nachricht %s erfolgreich veröffentlicht", mid)
+    else:
+        log.warning("→ Nachricht %s Veröffentlichung fehlgeschlagen (Reason: %s)", mid, reason_code)
+
+client.on_connect  = on_connect
+client.on_publish  = on_publish
+
+client.connect(BROKER, PORT, keepalive=60)
+client.loop_start()
+
+# ─ Discovery & Daten-Publishing ──────────────────────────────
+
+_published_config: set[str] = set()
+
+def publish_discovery(art: str):
+    topic = f"{BASE_TOPIC}/{art.lower()}/config"
+    if topic in _published_config:
+        return
+    _published_config.add(topic)
+    cfg: Dict[str, Any] = {
+        "name":                  f"{art}-Sensor",
+        "unique_id":             f"fischsensor_{art.lower()}",
+        "state_topic":           f"{BASE_TOPIC}/{art.lower()}/state",
+        "json_attributes_topic": f"{BASE_TOPIC}/{art.lower()}/attributes",
+        "icon":                  "mdi:fish",
+        "value_template":        "{{ value_json.status }}",
+        "device": {
+            "identifiers":  ["fischsensor"],
+            "name":         "Fischsensor",
+            "model":        "Fishing Docker",
+            "manufacturer": "Eigenentwicklung"
+        }
+    }
+    client.publish(topic, json.dumps(cfg, ensure_ascii=False), qos=0, retain=True)
+    log.info("→ Home Assistant Discovery publiziert für %s", art)
+
+def publish_data(art: str, entry: Dict[str, Any]):
+    base = f"{BASE_TOPIC}/{art.lower()}"
+    # 1) Attribute → retained
+    client.publish(
+        f"{base}/attributes",
+        json.dumps(entry, ensure_ascii=False),
+        qos=0,
+        retain=True
+    )
+    log.debug("🛈 Attributes gesendet und retained für %s", art)
+    # 2) State → Fangwahrscheinlichkeit_% als Status
+    client.publish(
+        f"{base}/state",
+        json.dumps({"status": entry.get("Fangwahrscheinlichkeit_%", 0)}),
+        qos=0,
+        retain=True
+    )
+    log.info("→ State gesendet und retained für %s (Status = %s%%)", art, entry.get("Fangwahrscheinlichkeit_%", 0))
+
+# ─ Hauptschleife ─────────────────────────────────────────────
+if __name__ == "__main__":
+    while True:
+        log.info("Hole verarbeitete Sensordaten …")
+        for entry in load_and_process():
+            art = entry.get("Art", "unbekannt").split(",", 1)[0]
+            publish_discovery(art)
+            publish_data(art, entry)
+        log.info("Warte %s Sekunden …", LOOP_INTERVAL)
+        time.sleep(LOOP_INTERVAL)
