@@ -1,48 +1,57 @@
 # logging_config.py
+# =============================================================
 import logging
 import os
+import sys
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-# TZ-Umgebung setzen und anwenden (benötigt tzdata im System)
-os.environ.setdefault('TZ', 'Europe/Berlin')
+# Zeitzone festlegen
+os.environ.setdefault("TZ", "Europe/Berlin")
 time.tzset()
 
-LOG_FORMAT = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
-# Lese LOG_LEVEL aus ENV, default INFO
-LOG_LEVEL = getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper(), logging.INFO)
+LOG_FORMAT = "%(asctime)s | %(levelname)-5s | %(name)s | %(message)s"
+
 
 class TZFormatter(logging.Formatter):
-    """
-    Custom Formatter, der Zeitstempel mit ZoneInfo (Europe/Berlin) formatiert.
-    """
+    """Formatter mit ISO-Zeitstempeln in Europe/Berlin."""
     def formatTime(self, record, datefmt=None):
-        dt = datetime.fromtimestamp(record.created, tz=ZoneInfo("Europe/Berlin"))
-        if datefmt:
-            return dt.strftime(datefmt)
-        # Standardformat entspricht ISO 8601
-        return dt.isoformat()
+        dt = datetime.fromtimestamp(record.created,
+                                    tz=ZoneInfo("Europe/Berlin"))
+        return dt.strftime(datefmt) if datefmt else dt.isoformat()
+
 
 def setup_logging(log_file: str = "analysis.log") -> None:
     """
-    Konfiguriert das Root-Logger-System:
-    - FileHandler schreibt in analysis.log (Mode 'w')
-    - StreamHandler schreibt in die Konsole
-    - Beide Handler nutzen den TZFormatter
+    Richtet File- und Stream-Handler ein.
+    Schaltet bei LOG_LEVEL=OFF|NONE|DISABLE alles stumm.
     """
-    file_handler = logging.FileHandler(log_file, mode='w', encoding='utf-8')
-    console_handler = logging.StreamHandler()
+    raw_level = os.getenv("LOG_LEVEL", "INFO").upper()
 
-    formatter = TZFormatter(LOG_FORMAT)
-    file_handler.setFormatter(formatter)
-    console_handler.setFormatter(formatter)
+    # --- OFF / NONE / DISABLE  → komplette Funkstille -----------------------
+    if raw_level in {"OFF", "NONE", "DISABLE"}:
+        logging.disable(logging.CRITICAL)
+        return
+
+    # --- normales Logging ---------------------------------------------------
+    log_level = getattr(logging, raw_level, logging.INFO)
+
+    file_handler = logging.FileHandler(log_file, mode="w",
+                                       encoding="utf-8")
+    file_handler.setLevel(logging.DEBUG)          # immer alles in Datei
+
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(log_level)           # Konsole gefiltert
+
+    fmt = TZFormatter(LOG_FORMAT)
+    file_handler.setFormatter(fmt)
+    console_handler.setFormatter(fmt)
 
     root = logging.getLogger()
-    # Alte Handler entfernen
     for h in list(root.handlers):
         root.removeHandler(h)
-    # Log-Level gemäß ENV
-    root.setLevel(LOG_LEVEL)
+
+    root.setLevel(logging.DEBUG)                  # interner Basis-Level
     root.addHandler(file_handler)
     root.addHandler(console_handler)
