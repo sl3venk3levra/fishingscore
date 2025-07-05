@@ -562,16 +562,27 @@ def compute_catch_probability_and_window(
 
         if not parts["match"]:
             soll_tiefe = _empfohlene_tiefe(pref)
-            tipps_txt.append(
-                f"Tiefe/Temp passt nicht – aktuell {parts['actual_depth']:.1f} m "
-                f"& {parts['temp_at_depth']:.1f} °C; "
-                + (f"→ geh auf ≈ {soll_tiefe:.1f} m" if soll_tiefe else "Tiefe anpassen")
-            )
-            improve["Tiefe_Temperatur"] = {
-                "aktuell":    {"Tiefe_m": round(parts["actual_depth"],1),
-                               "Temp_°C": round(parts["temp_at_depth"],1)},
-                "empfohlen":  {"Tiefe_m": soll_tiefe}
-            }
+
+            actual_depth = parts.get("actual_depth")
+            actual_temp  = parts.get("temp_at_depth")
+
+            if actual_depth is not None and actual_temp is not None:
+                tipps_txt.append(
+                    f"Tiefe/Temp passt nicht – aktuell {actual_depth:.1f} m & {actual_temp:.1f} °C"
+                )
+                improve["Tiefe_Temperatur"] = {
+                    "aktuell": {
+                        "Tiefe_m": round(actual_depth, 1),
+                        "Temp_°C": round(actual_temp, 1)
+                    },
+                    "empfohlen": {"Tiefe_m": soll_tiefe}
+                }
+            else:
+                tipps_txt.append("Tiefe/Temp Daten fehlen")
+                improve["Tiefe_Temperatur"] = {
+                    "aktuell": None,
+                    "empfohlen": {"Tiefe_m": soll_tiefe}
+                }
 
         # 2) Windrichtung
         grad = rec.get("windBearing")
