@@ -48,10 +48,7 @@ client = mqtt.Client(
 if USER:
     client.username_pw_set(USER, PASSWORD)
 
-# Automatische Reconnect-Delays (1 – 30 s)
-client.reconnect_delay_set(min_delay=1, max_delay=30)
-
-# ─ Callback-Handler ─────────────────────────────────────────────────────────
+# ─ Callback-Handler für v2
 def on_connect(client, userdata, flags, reason_code, properties):
     if reason_code == 0:
         log.info("✅ Verbunden mit MQTT-Broker %s:%s", BROKER, PORT)
@@ -91,11 +88,10 @@ client.loop_start()
 # ---------------------------------------------------------------------------
 _published_config: set[str] = set()
 
-def publish_discovery(art: str) -> None:
-    """Publish Home-Assistant-Discovery-Config für einen Fisch."""
+def publish_discovery(art: str):
     topic = f"{BASE_TOPIC}/{art.lower()}/config"
     if topic in _published_config:
-        return                     # schon publiziert
+        return
     _published_config.add(topic)
 
     cfg: Dict[str, Any] = {
@@ -119,11 +115,9 @@ def publish_discovery(art: str) -> None:
                    qos=0, retain=True)
     log.info("→ Home Assistant Discovery publiziert für %s", art)
 
-def publish_data(art: str, entry: Dict[str, Any]) -> None:
-    """Sende Attribute + State (Fangwahrscheinlichkeit) für einen Fisch."""
+def publish_data(art: str, entry: Dict[str, Any]):
     base = f"{BASE_TOPIC}/{art.lower()}"
-
-    # 1) Attribute (voller Datensatz)
+    # 1) Attribute → retained
     client.publish(
         f"{base}/attributes",
         json.dumps(entry, ensure_ascii=False),
@@ -139,8 +133,7 @@ def publish_data(art: str, entry: Dict[str, Any]) -> None:
         qos=0,
         retain=True,
     )
-    log.info("→ State gesendet und retained für %s (Status = %s%%)",
-             art, entry.get("Fangwahrscheinlichkeit_%", 0))
+    log.info("→ State gesendet und retained für %s (Status = %s%%)", art, entry.get("Fangwahrscheinlichkeit_%", 0))
 
 # ---------------------------------------------------------------------------
 # Hauptschleife
