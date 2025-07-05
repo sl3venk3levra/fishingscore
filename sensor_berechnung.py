@@ -516,32 +516,65 @@ def compute_catch_probability_and_window(
     preferences: Dict[str, Any],
     loc: Dict[str, datetime]
 ) -> List[Dict[str, Any]]:
+    """
+    Berechnet Fangwahrscheinlichkeit + dynamisches Fangfenster
+    und liefert zusätzlich:
+      • 'Tipps'  ........ Klartext-Liste
+      • 'Verbesserungen'  Dict mit allen Optimierungspunkten
+    """
     results: List[Dict[str, Any]] = []
     sunrise = loc.get("sunrise")
-    sunset = loc.get("sunset")
+    sunset  = loc.get("sunset")
 
-    # 0. Einmalige Zeit-Metadaten
-    now = datetime.now(_TZ)
-    today = (sunrise or now).date()
-    prev_m = 12 if today.month == 1 else today.month - 1
-    next_m = 1 if today.month == 12 else today.month + 1
+    now      = datetime.now(_TZ)
+    today    = (sunrise or now).date()
+    prev_m   = 12 if today.month == 1 else today.month - 1
+    next_m   = 1  if today.month == 12 else today.month + 1
+    is_night = bool(sunrise and sunset and (now < sunrise or now > sunset))
 
-    # 1. Normierung aller Gewichte
     total_weight = sum(WEIGHTS.values()) or 1.0
 
-    for rec in sensor_records:
-        art  = rec.get("Art")
-        pref = preferences.get(art, {})
+    # ─ Hilfsfunktion: Soll-Tiefe ermitteln ───────────────────────
+    def _empfohlene_tiefe(pref: Dict[str, Any]) -> float | None:
+        if 5 <= today.month <= 8:                     # Sommer
+            lst = pref.get("Bevorzugte_Wassertiefe_Sommer", [])
+        else:                                         # übrige Monate
+            lst = pref.get("Bevorzugte_Wassertiefe_Frühling_Herbst", [])
+        if not lst:
+            return None
+        lst_sorted = sorted(float(x) for x in lst)
+        return lst_sorted[len(lst_sorted)//2]         # Median
 
-        # 2. Temperatur & Tiefe (einmal pro Datensatz)
+    # ─ Haupt­schleife pro Fischdatensatz ──────────────────────────
+    for rec in sensor_records:
+        art   = rec.get("Art")
+        pref  = preferences.get(art, {})
+
+        tipps_txt: list[str]      = []   # Klartext
+        improve : Dict[str, Any]  = {}   # Strukturiert
+
+        # 1) Temperatur & Tiefe
         parts = score_temp_and_depth(rec, pref, today.month, WEIGHTS)
         rec["Errechnete_Wassertemperatur"] = parts["temp_at_depth"]
-        rec["Errechnete_Wassertiefe"]       = parts["actual_depth"]
-        rec["TempTiefe_Match"]              = parts["match"]
-        score = parts["match_score"]
-        logger.debug(f"[DEBUG] Nach TempTiefe: {score}")
+        rec["Errechnete_Wassertiefe"]      = parts["actual_depth"]
+        rec["TempTiefe_Match"]             = parts["match"]
 
-        # 3. Windrichtung
+        score = parts["match_score"]
+
+        if not parts["match"]:
+            soll_tiefe = _empfohlene_tiefe(pref)
+            tipps_txt.append(
+                f"Tiefe/Temp passt nicht – aktuell {parts['actual_depth']:.1f} m "
+                f"& {parts['temp_at_depth']:.1f} °C; "
+                + (f"→ geh auf ≈ {soll_tiefe:.1f} m" if soll_tiefe else "Tiefe anpassen")
+            )
+            improve["Tiefe_Temperatur"] = {
+                "aktuell":    {"Tiefe_m": round(parts["actual_depth"],1),
+                               "Temp_°C": round(parts["temp_at_depth"],1)},
+                "empfohlen":  {"Tiefe_m": soll_tiefe}
+            }
+
+        # 2) Windrichtung
         grad = rec.get("windBearing")
         wind_dir = (
             grad_to_windrichtung(grad)
@@ -551,124 +584,128 @@ def compute_catch_probability_and_window(
         rec["Windrichtung"] = wind_dir
         pref_wind = [d.lower() for d in pref.get("Bevorzugte_Windrichtung", [])]
         if "alle" in pref_wind or wind_dir.lower() in pref_wind:
-            w = WEIGHTS.get("Windrichtung", 0)
-            score += w
-            logger.debug(f"[DEBUG] Nach Windrichtung (+{w}): {score}")
+            score += WEIGHTS.get("Windrichtung", 0)
+        else:
+            tipps_txt.append(f"Windrichtung ungünstig ({wind_dir})")
+            improve["Windrichtung"] = {
+                "aktuell": wind_dir,
+                "empfohlen": pref.get("Bevorzugte_Windrichtung", [])
+            }
 
-        # 4. Trübung
+        # 3) Trübung
         tb = classify_trübung(rec)
         rec["Trübung"] = tb
         if tb in pref.get("Trübung", []):
-            w = WEIGHTS.get("Trübung", 0)
-            score += w
-            logger.debug(f"[DEBUG] Nach Trübung (+{w}): {score}")
+            score += WEIGHTS.get("Trübung", 0)
+        else:
+            tipps_txt.append(f"Trübung suboptimal ({tb})")
+            improve["Trübung"] = {"aktuell": tb,
+                                  "empfohlen": pref.get("Trübung", [])}
 
-        # 5. Windig (Geschwindigkeit)
-        wind = rec.get("Windgeschwindigkeit jetzt") \
-             or rec.get("Windgeschwindigkeit", 0.0)
-        w = WEIGHTS.get("Windig", 0)
-        if "windig" in pref.get("Bevorzugte_Wetter", []) and wind >= 4:
-            factor = min(1.0, (wind - 4) / 4)
-            score += w * factor
-            logger.debug(f"[DEBUG] Nach Windig linear (+{w*factor:.1f}): {score}")
+        # 4) Windgeschwindigkeit
+        wind = rec.get("Windgeschwindigkeit jetzt") or rec.get("Windgeschwindigkeit", 0.0)
+        if "windig" in pref.get("Bevorzugte_Wetter", []) and wind < 4:
+            tipps_txt.append("Mehr Wind (< 4 km/h) – kräftiger wäre besser")
+            improve["Windgeschwindigkeit_kmh"] = {
+                "aktuell": round(wind,1),
+                "empfohlen_min": 4
+            }
 
-        # 6. Mondphase
+        # 5) Mondphase
         mond_ist  = rec.get("Mondphase", "").lower()
         mond_pref = [m.lower() for m in pref.get("Bevorzugte_Mondphase", [])]
-        w = WEIGHTS.get("Mondphase", 0)
-        if "alle" in mond_pref or mond_ist in mond_pref:
-            score += w
-            logger.debug(f"[DEBUG] Nach Mondphase (+{w}): {score}")
-        elif "halbmond" in mond_pref and rec.get("Mondphase") in HALF_MOONS:
-            score += w
-            logger.debug(f"[DEBUG] Nach Halbmond (+{w}): {score}")
+        if not ("alle" in mond_pref or mond_ist in mond_pref or
+                ("halbmond" in mond_pref and rec.get("Mondphase") in HALF_MOONS)):
+            tipps_txt.append(f"Mondphase ungünstig ({rec.get('Mondphase')})")
+            improve["Mondphase"] = {"aktuell": rec.get("Mondphase"),
+                                    "empfohlen": pref.get("Bevorzugte_Mondphase", [])}
 
-        # 7. Saison
+        # 6) Saison
         saison_monate = [
-        int(m) for m in pref.get("Beste_Fangsaison", [])
-        if isinstance(m, int) or (isinstance(m, str) and m.isdigit())
+            int(m) for m in pref.get("Beste_Fangsaison", [])
+            if (isinstance(m, int) or (isinstance(m, str) and m.isdigit()))
         ]
         if today.month in saison_monate:
-            w = WEIGHTS.get("Saison", 0)
-            score += w
-            logger.debug(f"[DEBUG] Saison-Volltreffer (+{w}): {score}")
+            score += WEIGHTS.get("Saison", 0)
         elif prev_m in saison_monate or next_m in saison_monate:
-            w = WEIGHTS.get("Saison", 0) * 0.5
-            score += w
-            logger.debug(f"[DEBUG] Saison-Halbtreffer (+{w}): {score}")
+            score += WEIGHTS.get("Saison", 0) * 0.5
+        else:
+            tipps_txt.append("Nicht die beste Saison")
+            improve["Saison_Monat"] = {"aktuell": today.month,
+                                       "empfohlen": saison_monate}
 
-        # 8. Bewölkung
-        cloud_pref = pref.get("Bevorzugte_Wetter", [])
-        wp = []
-        for lw in cloud_pref:
-            lw_l = lw.lower()
-            if lw_l == "klar":
-                wp += ["klar", "fast klar"]
-            elif lw_l in ("dunstig", "neblig"):
-                wp.append("wechselhaft")
-            else:
-                wp.append(lw_l)
+        # 7) Bewölkung
         cs = classify_clouds(rec.get("cloudFraction", 0.0))
-        is_night = bool(sunrise and sunset and (now < sunrise or now > sunset))
-        if not is_night and cs in wp:
-            w = WEIGHTS.get("Bewölkung", 0)
-            score += w
-            logger.debug(f"[DEBUG] Nach Bewölkung (+{w}): {score}")
+        cloud_pref = pref.get("Bevorzugte_Wetter", [])
+        if not is_night:
+            mapped = []
+            for lw in cloud_pref:
+                lw_l = lw.lower()
+                if lw_l == "klar":
+                    mapped += ["klar", "fast klar"]
+                elif lw_l in ("dunstig", "neblig"):
+                    mapped.append("wechselhaft")
+                else:
+                    mapped.append(lw_l)
+            if cs in mapped:
+                score += WEIGHTS.get("Bewölkung", 0)
+            else:
+                tipps_txt.append(f"Wetterlage ungünstig ({cs})")
+                improve["Bewölkung"] = {"aktuell": cs,
+                                        "empfohlen": cloud_pref}
 
-        # 9. Regen-Bonus
+        # 8) Regen-Bonus / -Malus
         prec = rec.get("precipIntensity", 0.0)
         if classify_precip(prec) == "regen" and pref.get("Regen", False):
-            b = WEIGHTS.get("Regen_Bonus", 0)
-            score += b
-            logger.debug(f"[DEBUG] Nach Regen-Bonus (+{b}): {score}")
+            score += WEIGHTS.get("Regen_Bonus", 0)
+        if prec > 5:
+            tipps_txt.append("Zu starker Regen – besser abwarten")
+            improve["Regen_mm_h"] = {"aktuell": prec,
+                                     "Grenze": 5}
 
-        # 10. Luftdrucktrend
+        # 9) Luftdrucktrend
         trend       = rec.get("Luftdruck_trend", "unbekannt").lower()
         raw_prefs   = pref.get("Bevorzugter_Luftdrucktrend", [])
         trend_prefs = [TREND_MAP.get(r.lower(), r.lower()) for r in raw_prefs]
-        w = WEIGHTS.get("Luftdruck_trend", 0)
         if trend in trend_prefs:
-            score += w
-            logger.debug(f"[DEBUG] Nach Drucktrend (+{w}): {score}")
+            score += WEIGHTS.get("Luftdruck_trend", 0)
         else:
-            for raw in raw_prefs:
-                if TREND_MAP.get(raw.lower(), raw.lower()) == trend and raw.lower().startswith("leicht"):
-                    pt = w * 0.4
-                    score += pt
-                    logger.debug(f"[DEBUG] Nach leicht fallend (+{pt:.1f}): {score}")
-                    break
+            tipps_txt.append(f"Luftdrucktrend ({trend}) nicht ideal")
+            improve["Luftdrucktrend"] = {"aktuell": trend,
+                                         "empfohlen": raw_prefs}
 
-        # 11. Dynamisches Fangzeitfenster
+        # 10) Dynamisches Fangzeitfenster
         ts_score, window = score_time_of_day(
-                                            now, sunrise, sunset, pref,
-                                            cloud=rec.get("cloudFraction", 0.0),
-                                            wind=float(rec.get("Windgeschwindigkeit", 0.0)),
-                                            precip=float(rec.get("precipIntensity", 0.0)),
-                                        )
+            now, sunrise, sunset, pref,
+            cloud=rec.get("cloudFraction", 0.0),
+            wind=float(rec.get("Windgeschwindigkeit", 0.0)),
+            precip=float(rec.get("precipIntensity", 0.0)),
+        )
+        if ts_score == 0:
+            tipps_txt.append("Ungünstige Tageszeit – versuch Morgen/Abend")
+            improve["Tageszeit"] = "außerhalb Beißfenster"
+
         score += ts_score
         rec["Bestes_Fangfenster"] = {
             k: (s.strftime("%H:%M"), e.strftime("%H:%M"))
             for k, (s, e) in window.items()
         }
-        logger.debug(f"[DEBUG] Nach Fangfenster (+{ts_score:.2f}): {score}")
 
-        # 12. Nacht-Boost
+        # 11) Nacht-Boost
         if is_night and "Nacht" in pref.get("Bevorzugte_Tageszeit", []):
-            n = WEIGHTS.get("Nacht_Boost", 0)
-            score += n
-            logger.debug(f"[DEBUG] Nach Nacht-Boost (+{n}): {score}")
+            score += WEIGHTS.get("Nacht_Boost", 0)
 
-        # 13. Finaler Prozentwert
-        raw_prob  = round_to_next_five(score / total_weight * 100)
+        # 12) Finale Prozent + Regen-Malus
+        raw_prob   = round_to_next_five(score / total_weight * 100)
         final_prob = max(10, raw_prob) if score > 0 else 0
-
-        # 14. Regen-Malus
         if prec > 5:
-            m = WEIGHTS.get("Regen_Malus", 0)
-            final_prob = max(0, final_prob - m)
-            logger.debug(f"[DEBUG] Nach Regen-Malus (-{m}): {final_prob}")
+            final_prob = max(0, final_prob - WEIGHTS.get("Regen_Malus", 0))
 
-        results.append({**rec, "Fangwahrscheinlichkeit_%": final_prob})
+        # 13) Ergebnis anhängen
+        rec["Fangwahrscheinlichkeit_%"] = final_prob
+        rec["Tipps"]        = " · ".join(tipps_txt) if tipps_txt else "Alles optimal – Rute raus!"
+        rec["Verbesserungen"] = improve
+        results.append(rec)
 
     return results
 

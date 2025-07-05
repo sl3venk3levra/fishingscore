@@ -1,13 +1,17 @@
 # =============================================================
-# mqtt.py – FISCHIS MQTT-Publisher (mit % Fangwahrscheinlichkeit als State)
+# mqtt.py – FISCHIS MQTT-Publisher
+# Publisht pro Fisch:
+#   • % Fangwahrscheinlichkeit  →  …/<fisch>/state
+#   • komplette Attribute      →  …/<fisch>/attributes
+#   • Fang-Tipps (JSON)        →  …/<fisch>/todo
 # =============================================================
 
 import os
 import time
 import logging
 import json
-import signal           #  ➜ für sauberes Beenden
-import sys              #  ➜ für sys.exit
+import signal
+import sys
 from typing import Dict, Any
 
 from dotenv import load_dotenv
@@ -19,8 +23,8 @@ from sensor_berechnung import main as load_and_process
 # ---------------------------------------------------------------------------
 from logging_config import setup_logging
 
-load_dotenv()        # .env zuerst laden, damit LOG_LEVEL greift
-setup_logging()      # Logging gemäß LOG_LEVEL konfigurieren
+load_dotenv()          # .env zuerst laden, damit LOG_LEVEL greift
+setup_logging()        # Logging gemäß LOG_LEVEL konfigurieren
 log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -44,17 +48,15 @@ client = mqtt.Client(
     callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
 )
 
-# Zugangsdaten setzen (falls vorhanden)
 if USER:
     client.username_pw_set(USER, PASSWORD)
 
-# ─ Callback-Handler für v2
+# ─ Callback-Handler ─────────────────────────────────────────────────────────
 def on_connect(client, userdata, flags, reason_code, properties):
     if reason_code == 0:
         log.info("✅ Verbunden mit MQTT-Broker %s:%s", BROKER, PORT)
     else:
-        log.error("❌ Verbindung fehlgeschlagen zu %s:%s (Reason: %s)",
-                  BROKER, PORT, reason_code)
+        log.error("❌ Verbindung fehlgeschlagen (Reason: %s)", reason_code)
 
 def on_publish(client, userdata, mid, reason_code, properties):
     if reason_code == 0:
@@ -70,12 +72,11 @@ client.on_publish = on_publish
 def _graceful_exit(signum, frame):
     log.info("Shutdown-Signal (%s) empfangen – MQTT sauber beenden …", signum)
     try:
-        client.loop_stop()      # Netzwerk-Thread anhalten
-        client.disconnect()     # Clean DISCONNECT
+        client.loop_stop()
+        client.disconnect()
     finally:
         sys.exit(0)
 
-# Signale registrieren (Docker / systemd / CTRL-C)
 signal.signal(signal.SIGTERM, _graceful_exit)
 signal.signal(signal.SIGINT,  _graceful_exit)
 
@@ -88,52 +89,107 @@ client.loop_start()
 # ---------------------------------------------------------------------------
 _published_config: set[str] = set()
 
-def publish_discovery(art: str):
+def publish_discovery(art: str) -> None:
+    """
+    Veröffentlicht zwei Home-Assistant-Discovery-Blöcke pro Fisch:
+      • Prozent-Sensor  (…/<fisch>/config)
+      • Tipps-Sensor    (…/<fisch>/todo/config)
+    Wird pro Topic nur einmal aufgerufen.
+    """
+    # ─ Prozent-Sensor ───────────────────────────────────────────────────────
     topic = f"{BASE_TOPIC}/{art.lower()}/config"
-    if topic in _published_config:
-        return
-    _published_config.add(topic)
+    if topic not in _published_config:
+        _published_config.add(topic)
 
-    cfg: Dict[str, Any] = {
-        "name":                  f"{art}-Sensor",
-        "unique_id":             f"fischsensor_{art.lower()}",
-        "state_topic":           f"{BASE_TOPIC}/{art.lower()}/state",
-        "json_attributes_topic": f"{BASE_TOPIC}/{art.lower()}/attributes",
-        "icon":                  "mdi:fish",
-        "unit_of_measurement":   "%",
-        "state_class":           "measurement",
-        "value_template":        "{{ value_json.status | float }}",
+        cfg: Dict[str, Any] = {
+            "name":                f"{art}-Sensor",
+            "unique_id":           f"fischsensor_{art.lower()}",
+            "state_topic":         f"{BASE_TOPIC}/{art.lower()}/state",
+            "json_attributes_topic": f"{BASE_TOPIC}/{art.lower()}/attributes",
+            "icon":                "mdi:fish",
+            "unit_of_measurement": "%",
+            "state_class":         "measurement",
+            "value_template":      "{{ value_json.status | float }}",
+            "device": {
+                "identifiers":  ["fischsensor"],
+                "name":         "Fischsensor",
+                "model":        "Fishing Docker",
+                "manufacturer": "Eigenentwicklung",
+            },
+        }
+
+        client.publish(topic, json.dumps(cfg, ensure_ascii=False),
+                       qos=0, retain=True)
+        log.info("→ Discovery publiziert (Status) für %s", art)
+
+    # ─ Tipps-Sensor ─────────────────────────────────────────────────────────
+    todo_topic = f"{BASE_TOPIC}/{art.lower()}/todo/config"
+    if todo_topic in _published_config:
+        return
+    _published_config.add(todo_topic)
+
+    todo_cfg: Dict[str, Any] = {
+        "name":             f"{art}-Tipps",
+        "unique_id":        f"fischsensor_{art.lower()}_todo",
+        "state_topic":      f"{BASE_TOPIC}/{art.lower()}/todo",
+        "json_attributes_topic": f"{BASE_TOPIC}/{art.lower()}/todo",  # >>> neu
+        "icon":             "mdi:lightbulb-on-outline",
+        "device_class":     "diagnostic",
+        "entity_category":  "diagnostic",
+        "value_template":   "{{ value_json.todo_count }}",            # >>> neu
         "device": {
             "identifiers":  ["fischsensor"],
-            "name":         "Fischsensor",
-            "model":        "Fishing Docker",
-            "manufacturer": "Eigenentwicklung",
         },
     }
 
-    client.publish(topic, json.dumps(cfg, ensure_ascii=False),
+    client.publish(todo_topic, json.dumps(todo_cfg, ensure_ascii=False),
                    qos=0, retain=True)
-    log.info("→ Home Assistant Discovery publiziert für %s", art)
+    log.info("→ Discovery publiziert (Tipps) für %s", art)
 
-def publish_data(art: str, entry: Dict[str, Any]):
+# ---------------------------------------------------------------------------
+
+def publish_data(art: str, entry: Dict[str, Any]) -> None:
+    """
+    Publisht:
+      • alle Attribute          → attributes (Topic retained)
+      • Prozent-Status          → state
+      • Fang-Tipps (JSON)       → todo
+    """
     base = f"{BASE_TOPIC}/{art.lower()}"
-    # 1) Attribute → retained
+
+    # 1) Attribute
     client.publish(
         f"{base}/attributes",
         json.dumps(entry, ensure_ascii=False),
         qos=0,
         retain=True,
     )
-    log.debug("🛈 Attributes gesendet und retained für %s", art)
+    log.debug("🛈 Attributes gesendet & retained für %s", art)
 
-    # 2) State – nur die Prozentzahl
+    # 2) Status-Prozent
     client.publish(
         f"{base}/state",
         json.dumps({"status": entry.get("Fangwahrscheinlichkeit_%", 0)}),
         qos=0,
         retain=True,
     )
-    log.info("→ State gesendet und retained für %s (Status = %s%%)", art, entry.get("Fangwahrscheinlichkeit_%", 0))
+    log.info("→ Status gesendet & retained für %s (%s %%)",
+             art, entry.get("Fangwahrscheinlichkeit_%", 0))
+
+    # 3) Tipps-Sensor  (jetzt JSON statt Plaintext)  # >>> geändert
+    todo_payload = {
+        "todo_count":     len(entry.get("Verbesserungen", {})),
+        "tipps_text":     entry.get("Tipps"),
+        "verbesserungen": entry.get("Verbesserungen", {}),
+    }
+    client.publish(
+        f"{base}/todo",
+        json.dumps(todo_payload, ensure_ascii=False),
+        qos=0,
+        retain=True,
+    )
+    log.debug("🛈 Tipps gesendet & retained für %s (offen: %s)",
+              art, todo_payload["todo_count"])
 
 # ---------------------------------------------------------------------------
 # Hauptschleife
@@ -147,7 +203,7 @@ if __name__ == "__main__":
                 publish_discovery(art)
                 publish_data(art, entry)
 
-            log.info("Warte %s Sekunden …", LOOP_INTERVAL)
+            log.info("Warte %s s …", LOOP_INTERVAL)
             time.sleep(LOOP_INTERVAL)
 
     except KeyboardInterrupt:
