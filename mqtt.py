@@ -6,6 +6,8 @@ import os
 import time
 import logging
 import json
+import signal           #  ➜ für sauberes Beenden
+import sys              #  ➜ für sys.exit
 from typing import Dict, Any
 
 from dotenv import load_dotenv
@@ -39,12 +41,17 @@ log.debug("→ Verbinde zu MQTT-Broker %r:%s", BROKER, PORT)
 # ---------------------------------------------------------------------------
 client = mqtt.Client(
     protocol=mqtt.MQTTv5,
-    callback_api_version=mqtt.CallbackAPIVersion.VERSION2
+    callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
 )
+
+# Zugangsdaten setzen (falls vorhanden)
 if USER:
     client.username_pw_set(USER, PASSWORD)
 
-# ─ Callback-Handler
+# Automatische Reconnect-Delays (1 – 30 s)
+client.reconnect_delay_set(min_delay=1, max_delay=30)
+
+# ─ Callback-Handler ─────────────────────────────────────────────────────────
 def on_connect(client, userdata, flags, reason_code, properties):
     if reason_code == 0:
         log.info("✅ Verbunden mit MQTT-Broker %s:%s", BROKER, PORT)
@@ -59,9 +66,23 @@ def on_publish(client, userdata, mid, reason_code, properties):
         log.warning("→ Nachricht %s Veröffentlichung fehlgeschlagen (Reason: %s)",
                     mid, reason_code)
 
-client.on_connect  = on_connect
-client.on_publish  = on_publish
+client.on_connect = on_connect
+client.on_publish = on_publish
 
+# ─ Graceful-Shutdown-Handler ────────────────────────────────────────────────
+def _graceful_exit(signum, frame):
+    log.info("Shutdown-Signal (%s) empfangen – MQTT sauber beenden …", signum)
+    try:
+        client.loop_stop()      # Netzwerk-Thread anhalten
+        client.disconnect()     # Clean DISCONNECT
+    finally:
+        sys.exit(0)
+
+# Signale registrieren (Docker / systemd / CTRL-C)
+signal.signal(signal.SIGTERM, _graceful_exit)
+signal.signal(signal.SIGINT,  _graceful_exit)
+
+# ─ Verbindung aufbauen & Netzwerk-Thread starten ───────────────────────────
 client.connect(BROKER, PORT, keepalive=60)
 client.loop_start()
 
@@ -70,12 +91,11 @@ client.loop_start()
 # ---------------------------------------------------------------------------
 _published_config: set[str] = set()
 
-
 def publish_discovery(art: str) -> None:
     """Publish Home-Assistant-Discovery-Config für einen Fisch."""
     topic = f"{BASE_TOPIC}/{art.lower()}/config"
     if topic in _published_config:
-        return  # schon publiziert
+        return                     # schon publiziert
     _published_config.add(topic)
 
     cfg: Dict[str, Any] = {
@@ -99,12 +119,11 @@ def publish_discovery(art: str) -> None:
                    qos=0, retain=True)
     log.info("→ Home Assistant Discovery publiziert für %s", art)
 
-
 def publish_data(art: str, entry: Dict[str, Any]) -> None:
     """Sende Attribute + State (Fangwahrscheinlichkeit) für einen Fisch."""
     base = f"{BASE_TOPIC}/{art.lower()}"
 
-    # 1) Attribute (kompletter Datensatz) – retained
+    # 1) Attribute (voller Datensatz)
     client.publish(
         f"{base}/attributes",
         json.dumps(entry, ensure_ascii=False),
@@ -123,16 +142,20 @@ def publish_data(art: str, entry: Dict[str, Any]) -> None:
     log.info("→ State gesendet und retained für %s (Status = %s%%)",
              art, entry.get("Fangwahrscheinlichkeit_%", 0))
 
-
 # ---------------------------------------------------------------------------
 # Hauptschleife
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    while True:
-        log.info("Hole verarbeitete Sensordaten …")
-        for entry in load_and_process():
-            art = entry.get("Art", "unbekannt").split(",", 1)[0]
-            publish_discovery(art)
-            publish_data(art, entry)
-        log.info("Warte %s Sekunden …", LOOP_INTERVAL)
-        time.sleep(LOOP_INTERVAL)
+    try:
+        while True:
+            log.info("Hole verarbeitete Sensordaten …")
+            for entry in load_and_process():
+                art = entry.get("Art", "unbekannt").split(",", 1)[0]
+                publish_discovery(art)
+                publish_data(art, entry)
+
+            log.info("Warte %s Sekunden …", LOOP_INTERVAL)
+            time.sleep(LOOP_INTERVAL)
+
+    except KeyboardInterrupt:
+        _graceful_exit(signal.SIGINT, None)

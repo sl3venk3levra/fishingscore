@@ -7,9 +7,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 import math
 import ephem
+from typing import Final
 from zoneinfo import ZoneInfo
 from logging_config import setup_logging
 from basic_sensor import BasicSensor
+from math import exp
 
 # -----------------------------------------------------------------------
 # Basiskonfiguration
@@ -40,19 +42,20 @@ def load_weights() -> Dict[str, float]:
     except Exception:
         logger.warning("Fehler beim Laden der Gewichtungen, verwende Fallback")
         return {
-            "Saison":             12,
-            "Temperatur":         10,
-            "Wassertiefe":         7,
-            "TempTiefe_Match":     13,
-            "Tageszeitfenster":   14,
-            "Nacht_Boost":         8,
-            "Luftdruck_trend":     7,
-            "Niederschlag":        8,
-            "Bewölkung":           4,
-            "Mondphase":           6,
-            "Windrichtung":        3,
-            "Windig":              4,
-            "Trübung":             4
+            "Saison":             8,
+            "Temperatur":        15,
+            "Wassertiefe":       10,
+            "TempTiefe_Match":   15,
+            "Tageszeitfenster":  12,
+            "Nacht_Boost":        6,
+            "Luftdruck_trend":    6,
+            "Windrichtung":       3,
+            "Windig":             4,
+            "Bewölkung":          4,
+            "Regen_Bonus":        4,
+            "Regen_Malus":        4,
+            "Mondphase":          4,
+            "Trübung":            4
         }
 
 
@@ -79,6 +82,19 @@ HALF_MOONS = {"Zunehmender Mond", "Abnehmender Mond"}
 # -----------------------------------------------------------------------
 # Hilfsfunktionen
 # -----------------------------------------------------------------------
+
+def _dt(date_: datetime, hours: float) -> datetime:
+    """Hilfsfunktion: date_ + hours (Positiv = vorwärts, Negativ = rückwärts)."""
+    return date_ + timedelta(hours=hours)
+
+def _clamp(val: float, low: float, high: float) -> float:
+    """Begrenzt val auf das Intervall [low, high]."""
+    return max(low, min(high, val))
+
+# Feature-Flag: 1 = dynamisches Modell, 0 = statisches 4-m-Modell
+_DYNAMIC_EPI: Final[bool] = bool(int(os.getenv("DYNAMIC_EPI", "1")))
+
+
 def round_to_next_five(pct: int) -> int:
     """
     Rundet immer auf das nächsthöhere Vielfache von 5,
@@ -94,6 +110,17 @@ def classify_clouds(fraction: Optional[float]) -> str:
     if fraction <= 0.2:
         return "klar"
     return "wechselhaft"
+
+def get_season(month: int) -> str:
+    if month in [3, 4, 5]:
+        return "Frühling"
+    elif month in [6, 7, 8]:
+        return "Sommer"
+    elif month in [9, 10, 11]:
+        return "Herbst"
+    else:
+        return "Winter"
+
 
 def classify_precip(mm_h: Optional[float]) -> str:
     if mm_h is None:
@@ -122,44 +149,120 @@ def time_in_window(now: datetime, s: datetime, e: datetime) -> bool:
     else:
         # Fenster geht über Mitternacht!
         return now >= s or now <= e
+
+def gauss_score(diff: float, weight: float, sigma: float = 2.0) -> float:
+    """
+    Skaliert eine Gauß-Kurve (μ=0) auf 0..weight.
+    diff  : Abstand zum Ideal (>=0)
+    sigma : Breite der Akzeptanzzone
+    """
+    if sigma <= 0 or weight <= 0:
+        return 0.0
+    return weight * math.exp(-(diff ** 2) / (2 * sigma ** 2))
     
 
-def temp_profile(depth: float, surface_temp: float, season: str) -> float:
+def temp_profile(depth: float,
+                 surface_temp: float,
+                 season: str,
+                 wind_speed: float | None = None,
+                 cloud: float | None = None) -> float:
     """
-    Liefert Wassertemperatur [°C] in <depth> m.
-    Vereinfachtes Schichtmodell für mitteleuropäische Seen.
+    Realistische Temperaturabschätzung in 'depth' Metern.
+    Berücksichtigt Saison, Oberflächentemperatur, Wind und (optional) Bewölkung.
     """
-    # ─ Sommer: stabile Schichtung ─────────────────────────────
+
+    wind = wind_speed or 0.0      # m s-1
+    cloud = cloud or 0.0          # 0–1, beeinflusst lediglich Frühling/Herbst (optional)
+
+    # ───────────────────   SOMMER: stabile Schichtung   ────────────────────
     if season == "Sommer":
-        epi = 4          # Epilimnion-Tiefe [m]
-        thermo = 6       # Thermokline-Dicke [m]  (4–10 m)
-        if depth <= epi:                     # Epilimnion
-            return surface_temp - 0.2 * depth        # ~0.2 °C/m
+        # 1) Epilimnion-Tiefe: typ. 2 – 6 m, etwas tiefer bei Wind
+        epi = _clamp(
+            0.2 * (surface_temp - 4.0) + 0.2 * _clamp(wind, 0, 5),  # Basis + Wind
+            2.0, 6.0
+        )
+
+        # 2) Thermokline-Dicke: fix 3 m + leichter Wind-Aufschlag (max 5 m)
+        thermo = _clamp(3.0 + 0.3 * _clamp(wind, 0, 5), 3.0, 5.0)
+
+        # 3) Temperatur-Gradienten (Literaturwerte)
+        grad_epi   = 0.2                    # °C pro Meter im Epilimnion
+        grad_therm = 1.2                    # °C pro Meter in der Thermokline
+
+        if depth <= epi:                    # Epilimnion
+            return surface_temp - depth * grad_epi
+
         if depth <= epi + thermo:           # Thermokline
-            return (surface_temp
-                    - 0.2 * epi             # Abkühlung Epilimnion
-                    - 1.0 * (depth - epi))  # ≈1 °C/m in der Thermokline
-        return 4.0                          # Hypolimnion
+            return (surface_temp - epi * grad_epi
+                    - (depth - epi) * grad_therm)
 
-    # ─ Winter: inverse Schichtung unter Eis ──────────────────
+        # 4) Hypolimnion – linearer Abfall bis min. 4 °C
+        hypo_start = surface_temp - epi * grad_epi - thermo * grad_therm
+        return max(hypo_start - (depth - epi - thermo) * 0.3, 4.0)
+
+    # ───────────────────   FRÜHLING / HERBST (Vollmischung)   ───────────────
+    if season in {"Frühling", "Herbst"}:
+        # Bewölkte Tage mischen weniger (leicht kälter), sonnige Tage etwas wärmer
+        cloud_factor = 0.5 * (1 - cloud)          # 0 (bewölkt) … 0,5 (klar)
+        return surface_temp + cloud_factor
+
+    # ───────────────────   WINTER (Inverse Schichtung)   ────────────────────
+    # Eisdecke oder sehr kaltes Oberflächenwasser
     if season == "Winter":
-        if depth <= 0.5:                    # 0–50 cm: Eis/Wasserfilm
-            return max(0.1, surface_temp)   # nicht unter 0 °C
-        return 4.0                          # darunter fast konstant 4 °C
+        if depth <= 0.5:                          # 0–50 cm: Eis/Nahoberfläche
+            return max(0.1, surface_temp)
+        return 4.0                                # darunter ca. 4 °C
 
-    # ─ Frühling & Herbst: Vollzirkulation ────────────────────
-    # (Isotherm – Oberfläche ≈ Tiefe)
+    # Fallback: einfach Oberfläche
     return surface_temp
 
-def get_season(month: int) -> str:
-    if month in [3, 4, 5]:
-        return "Frühling"
-    elif month in [6, 7, 8]:
-        return "Sommer"
-    elif month in [9, 10, 11]:
-        return "Herbst"
-    else:
-        return "Winter"
+# -----------------------------------------------------------------------
+# Helfer: Schichtung & Tiefenwahl
+# -----------------------------------------------------------------------
+def stratification_layers(surface_temp: float, season: str, wind: float = 0.0
+                          ) -> tuple[float, float]:
+    """Realistische Epi- & Thermokline-Tiefe (Sommer); sonst ∞."""
+    if season != "Sommer":
+        return float("inf"), 0.0
+
+    epi = _clamp(0.2 * (surface_temp - 4.0) + 0.2 * _clamp(wind, 0, 5),
+                 2.0, 6.0)                         # 2–6 m
+    thermo = _clamp(3.0 + 0.3 * _clamp(wind, 0, 5),
+                    3.0, 5.0)                      # 3–5 m
+    return epi, thermo
+
+
+def choose_best_depth(surface_temp: float, season: str, pref_depths: list[float], pref_temps: list[float], tod_bias: str | None = None, *, wind_speed: float = 0.0,
+    cloud: float = 0.0,
+) -> float:
+    
+    """Ermittelt beste Tiefe – temperatur- und schichtoptimiert, mit optionalem Tageszeit-Bias."""
+    if not pref_depths:
+        return 0.0
+
+    epi, thermo = stratification_layers(surface_temp, season, wind_speed)
+    limit = epi + thermo
+    candidates = [d for d in pref_depths if d <= limit]
+    if not candidates:
+        candidates = pref_depths
+
+    target = sum(pref_temps) / len(pref_temps) if pref_temps else surface_temp
+    best = min(
+        candidates,
+        key=lambda d: abs(
+            temp_profile(
+                d, surface_temp, season,
+                wind_speed=wind_speed, cloud=cloud
+            ) - target
+        ),
+    )
+
+    if tod_bias == "flach" and best > min(pref_depths):
+        best = max(min(pref_depths), best - 0.5)
+    elif tod_bias == "tief" and best < max(pref_depths):
+        best = min(max(pref_depths), best + 0.5)
+
+    return float(best)
 
 
 
@@ -167,66 +270,90 @@ def get_season(month: int) -> str:
 # Kombiniertes Temperatur- und Tiefen-Scoring
 # -----------------------------------------------------------------------
 def score_temp_and_depth(entry, pref, month, weights):
+    """Berechnet Teil-Scores für Temperatur und Wassertiefe
+       und gibt ein Dict mit allen Zwischenergebnissen zurück.
+    """
+    # ───── Eingangsdaten prüfen ───────────────────────────────────────────
     surf_temp = entry.get("Oberfläche_temp")
+    wind  = float(entry.get("Windgeschwindigkeit", 0.0))
+    cloud = float(entry.get("cloudFraction",      0.0))
+
     if surf_temp is None:
         return {
-            "temp_score": 0.0,
-            "depth_score": 0.0,
-            "match_score": 0.0,
-            "temp_at_depth": None,
-            "actual_depth": None,
-            "match": False,
-            "diff_t": None,
-            "min_diff_d": None
+            "temp_score": 0.0, "depth_score": 0.0, "match_score": 0.0,
+            "temp_at_depth": None, "actual_depth": None,
+            "match": False, "diff_t": None, "min_diff_d": None,
         }
 
+    # ───── Saison & Tiefen­präferenzen ────────────────────────────────────
     season = get_season(month)
-    if season in ["Frühling", "Herbst"]:
-        preferred_depths = pref.get("Bevorzugte_Wassertiefe_Frühling_Herbst", [])
-    elif season == "Sommer":
-        preferred_depths = pref.get("Bevorzugte_Wassertiefe_Sommer", [])
-    else:
-        preferred_depths = pref.get("Bevorzugte_Wassertiefe_Winter", [])
+    depth_key = {
+        "Frühling": "Bevorzugte_Wassertiefe_Frühling_Herbst",
+        "Herbst":   "Bevorzugte_Wassertiefe_Frühling_Herbst",
+        "Sommer":   "Bevorzugte_Wassertiefe_Sommer",
+        "Winter":   "Bevorzugte_Wassertiefe_Winter",
+    }[season]
+    preferred_depths = pref.get(depth_key, [])
 
+    # ───── effektive Tiefe bestimmen ──────────────────────────────────────
     actual_depth = entry.get("actual_depth")
     if actual_depth is None:
-        depth_values = [float(d) for d in preferred_depths]
-        actual_depth = sum(depth_values) / len(depth_values) if depth_values else 0.0
+        now        = datetime.now(tz=_TZ)
+        bias_times = ["Morgen", "Abend", "Nacht"]
+        precip     = float(entry.get("precipIntensity", 0.0))
 
-    season = get_season(month)
-    temp_at_depth = temp_profile(actual_depth, surf_temp, season)
+        tod_bias = "flach" if any(
+            time_in_window(now, *w)
+            for w in build_time_windows(
+                    now, now, bias_times,
+                    cloud=cloud, wind=wind, precip=precip
+                ).values()
+        ) else None
 
+        actual_depth = choose_best_depth(
+            surf_temp, season,
+            [float(d) for d in preferred_depths],
+            [float(t) for t in pref.get("Bevorzugte_Wassertemperatur", [])],
+            tod_bias=tod_bias,
+            wind_speed=wind,
+            cloud=cloud,
+        )
+
+    # ───── Temperatur an dieser Tiefe ─────────────────────────────────────
+    temp_at_depth = temp_profile(
+        actual_depth, surf_temp, season,
+        wind_speed=wind, cloud=cloud,
+    )
+
+    # ───── Temperatur-Score (Gauß) ────────────────────────────────────────
     prefs_t = [float(x) for x in pref.get("Bevorzugte_Wassertemperatur", [])]
-    avg_pref = sum(prefs_t) / len(prefs_t) if prefs_t else temp_at_depth
-    diff_t = abs(temp_at_depth - avg_pref)
+    if prefs_t:
+        diff_t = min(abs(temp_at_depth - p) for p in prefs_t)
+        sigma  = 0.25 * (max(prefs_t) - min(prefs_t) or 1.0)
+    else:
+        diff_t = abs(temp_at_depth - surf_temp)
+        sigma  = 2.0
+
     temp_weight = weights.get("Temperatur", 0.0)
-    if diff_t <= 0.5:
-        temp_score = temp_weight
-    elif diff_t <= 1.5:
-        temp_score = temp_weight * 0.75
-    elif diff_t <= 3.0:
-        temp_score = temp_weight * 0.5
-    elif diff_t <= 5.0:
-        temp_score = temp_weight * 0.25
-    else:
-        temp_score = 0.0
+    temp_score  = gauss_score(diff_t, temp_weight, sigma)
+    MIN_TEMP_SCORE = 0.3 * temp_weight
+    temp_ok = temp_score >= MIN_TEMP_SCORE
 
+    # ───── Tiefen-Score ───────────────────────────────────────────────────
     if preferred_depths:
-        min_diff_d = min(abs(actual_depth - float(d)) for d in preferred_depths)
+        min_diff_d   = min(abs(actual_depth - float(d)) for d in preferred_depths)
         depth_weight = weights.get("Wassertiefe", 0.0)
-        if min_diff_d <= 0.5:
-            depth_score = depth_weight
-        elif min_diff_d <= 1.0:
-            depth_score = depth_weight * 0.5
-        else:
-            depth_score = 0.0
+        if   min_diff_d <= 0.5: depth_score = depth_weight
+        elif min_diff_d <= 1.0: depth_score = depth_weight * 0.5
+        else:                   depth_score = 0.0
     else:
-        min_diff_d = None
-        depth_score = 0.0
+        min_diff_d, depth_score = None, 0.0
 
-    match = (temp_score > 0) and (depth_score > 0)
+    # ───── Match-Bonus ────────────────────────────────────────────────────
+    match       = temp_ok and (depth_score > 0)
     match_score = weights.get("TempTiefe_Match", 0.0) if match else 0.0
 
+    # ───── *** WICHTIG: Ergebnis zurückgeben! *** ─────────────────────────
     return {
         "temp_score":    temp_score,
         "depth_score":   depth_score,
@@ -235,9 +362,8 @@ def score_temp_and_depth(entry, pref, month, weights):
         "actual_depth":  actual_depth,
         "match":         match,
         "diff_t":        diff_t,
-        "min_diff_d":    min_diff_d
+        "min_diff_d":    min_diff_d,
     }
-
 
 
 # -----------------------------------------------------------------------
@@ -292,30 +418,77 @@ def clean_and_calculate(data_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]
         logger.error(f"Fehler Speichern: {ex}")
     return data_list
 
+
+def light_modifier(cloud: float, wind: float, precip: float) -> float:
+    """
+    Liefert einen Wert 0..1 für Tageslicht­helligkeit.
+    - cloud        : 0 (klar) – 1 (voll bedeckt)
+    - wind         : m/s   (0–8 ⇒ 0–0.2 künstliche Bewölkung)
+    - precip       : mm/h  (>0 ⇒ Abdunklung + Geräuschkulisse)
+    """
+    cloud_eff = cloud + 0.02 * min(wind, 10)        # Wind = max +0.2 Bewölkung
+    rain_eff  = 0.15 if precip >= 0.2 else 0.0      # merkbarer Regen
+    return max(0.0, 1.0 - _clamp(cloud_eff + rain_eff, 0.0, 1.0))
+
+
 # -----------------------------------------------------------------------
 # Dynamische Zeitfenster
 # -----------------------------------------------------------------------
-def build_time_windows(sunrise: datetime, sunset: datetime, prefs: List[str]) -> Dict[str, Tuple[datetime, datetime]]:
-    b = BUFFERS
-    dawn = timedelta(minutes=b.get("Dämmerung", 45))
-    day = timedelta(minutes=b.get("Tag", 30))
-    night = timedelta(minutes=b.get("Nacht", 30))
-    w: Dict[str, Tuple[datetime, datetime]] = {}
+def build_time_windows(
+    sunrise: datetime,
+    sunset:  datetime,
+    prefs:   list[str],
+    *,
+    cloud:  float,
+    wind:   float,
+    precip: float,
+) -> dict[str, tuple[datetime, datetime]]:
+    """
+    Liefert (start, end)-Tupel für gewünschte Tageszeiten.
+    Puffer werden dynamisch nach Licht­verhältnissen erweitert/
+    verkürzt.  start < end gilt immer, auch über Mitternacht.
+    """
+    # 1) Lichtpegel bestimmen (0 dunkel – 1 hell)
+    L = light_modifier(cloud, wind, precip)
+
+    # 2) Basis-Puffer (min)  ➜  h
+    buf = BUFFERS
+    dawn   = (buf.get("Dämmerung", 45) * (1 + (1 - L))) / 60
+    daybuf = (buf.get("Tag", 30) * L) / 60
+    nightb = (buf.get("Nacht", 30) * (1 + (1 - L))) / 60
+
+    win: dict[str, tuple[datetime, datetime]] = {}
+
     if "Morgen" in prefs:
-        w["Morgen"] = (sunrise - dawn, sunrise + dawn)
-    if "Tag" in prefs:
-        w["Tag"] = (sunrise + day, sunset - day)
+        win["Morgen"] = (_dt(sunrise, -dawn), _dt(sunrise,  dawn))
+
     if "Abend" in prefs:
-        w["Abend"] = (sunset - dawn, sunset + dawn)
+        win["Abend"] = (_dt(sunset, -dawn), _dt(sunset,  dawn))
+
+    if "Tag" in prefs:
+        win["Tag"] = (_dt(sunrise,  daybuf), _dt(sunset, -daybuf))
+
     if "Nacht" in prefs:
-        w["Nacht"] = (sunset + night, sunrise + timedelta(days=1) - night)
-    return w
+        s = _dt(sunset,  nightb)
+        e = _dt(sunrise, nightb) + timedelta(days=1)
+        win["Nacht"] = (s, e)
+
+    return win
 
 
-def score_time_of_day(now: datetime, sunrise: datetime, sunset: datetime, pref: Dict[str, Any]) -> Tuple[float, Dict[str, Tuple[datetime, datetime]]]:
+
+def score_time_of_day(now: datetime,
+                      sunrise: datetime,
+                      sunset: datetime,
+                      pref: Dict[str, Any],
+                      *,
+                      cloud: float,
+                      wind: float,
+                      precip: float) -> Tuple[float, Dict[str, Tuple[datetime, datetime]]]:
+
     prefs = pref.get("Bevorzugte_Tageszeit", [])
     ws = WEIGHTS
-    wins = build_time_windows(sunrise, sunset, prefs)
+    wins = build_time_windows(sunrise, sunset, prefs,cloud=cloud, wind=wind, precip=precip)
     sc = 0.0
     half = timedelta(hours=1)
     logger.debug(f"[Score-Tageszeit] Jetzt: {now}")
@@ -323,10 +496,10 @@ def score_time_of_day(now: datetime, sunrise: datetime, sunset: datetime, pref: 
     for typ, (s, e) in wins.items():
         if time_in_window(now, s, e):
             logger.debug(f"[Score-Tageszeit] {typ}: Im Zeitfenster! +{ws.get('Tageszeitfenster', 0)} Punkte")
-            sc += ws.get("Tageszeitfenster", 0)
+            sc += ws.get("Tageszeitfenster", 0) * light_modifier(cloud, wind, precip)
         elif time_in_window(now, s - half, s) or time_in_window(now, e, e + half):
             logger.debug(f"[Score-Tageszeit] {typ}: Am Rand des Zeitfensters! +{ws.get('Tageszeitfenster', 0)*0.5} Punkte")
-            sc += ws.get("Tageszeitfenster", 0) * 0.5
+            sc += ws.get("Tageszeitfenster", 0) * light_modifier(cloud, wind, precip)
     # Nacht-Bonus immer ZUSÄTZLICH!
     if "Nacht" in prefs and "Nacht" in wins and time_in_window(now, *wins["Nacht"]):
         logger.debug(f"[Score-Tageszeit] Nachtfenster aktiv! +{ws.get('Nacht_Boost', 0)} Punkte")
@@ -466,7 +639,12 @@ def compute_catch_probability_and_window(
                     break
 
         # 11. Dynamisches Fangzeitfenster
-        ts_score, window = score_time_of_day(now, sunrise, sunset, pref)
+        ts_score, window = score_time_of_day(
+                                            now, sunrise, sunset, pref,
+                                            cloud=rec.get("cloudFraction", 0.0),
+                                            wind=float(rec.get("Windgeschwindigkeit", 0.0)),
+                                            precip=float(rec.get("precipIntensity", 0.0)),
+                                        )
         score += ts_score
         rec["Bestes_Fangfenster"] = {
             k: (s.strftime("%H:%M"), e.strftime("%H:%M"))

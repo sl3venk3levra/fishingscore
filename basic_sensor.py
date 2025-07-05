@@ -20,7 +20,7 @@ import re
 import logging
 import ephem
 from zoneinfo import ZoneInfo
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import List, Dict, Any, Optional
 
 import requests
@@ -57,34 +57,57 @@ class BasicSensor:
     """
 
     @staticmethod
-    def _parse_date_span(span: str) -> tuple[datetime.date, datetime.date] | None:
+    def _parse_date_span(span: str) -> tuple[date, date] | None:
         """
-        Sucht nach zwei Datumsangaben im Format 'D. Monat' getrennt durch 'bis' oder Striche.
-        Gibt (start, end) als date zurück oder None, wenn nichts gefunden.
+        Parsed einen String wie „1. Dezember – 28. Februar“ und liefert
+        (start, end) als echte date-Objekte, deren Zeitraum *das heutige Datum*
+        potentiell einschließt.  Kreuzt der Span den Jahreswechsel, wird
+        automatisch das passende Jahr korrigiert.
+
+        Rückgabe
+        --------
+        (start, end) – beide inclusive – oder None bei Parse-Fehler.
         """
-        # Alle möglichen Trenner: bis, -, –, —
         parts = re.split(r"\s*(?:bis|[-–—])\s*", span)
         if len(parts) != 2:
             return None
-        def to_date(txt: str) -> datetime.date:
-            txt = txt.strip()
-            # „1. Mai“ → Tag und Monat
-            match = re.match(r"(\d{1,2})\.\s*([A-Za-zäöüÄÖÜ]+)", txt)
-            if not match:
+
+        def to_md(txt: str) -> tuple[int, int]:
+            m = re.match(r"(\d{1,2})\.\s*([A-Za-zäöüÄÖÜ]+)", txt.strip())
+            if not m:
                 raise ValueError(f"Ungültiges Datum: {txt}")
-            day, month_name = match.groups()
+            day, month_name = m.groups()
             month = MONTHS_DE.get(month_name)
             if not month:
                 raise ValueError(f"Unbekannter Monat: {month_name}")
-            today = datetime.now(tz=_TZ).date()
-            # Jahreslogik: wenn Start im Dez und heute im Jan, Jahreswechsel berücksichtigen?
-            return datetime(today.year, month, int(day), tzinfo=_TZ).date()
+            return int(day), month
+
         try:
-            start, end = to_date(parts[0]), to_date(parts[1])
-            return start, end
-        except Exception as e:
-            log.warning("Schonzeit-Parsing fehlgeschlagen für '%s': %s", span, e)
+            d1, m1 = to_md(parts[0])
+            d2, m2 = to_md(parts[1])
+        except ValueError as err:
+            log.warning("Schonzeit-Parsing fehlgeschlagen für '%s': %s", span, err)
             return None
+
+        today = datetime.now(tz=_TZ).date()
+
+        # Start- und Enddatum erst einmal ins laufende Jahr setzen
+        start = date(today.year,  m1, d1)
+        end   = date(today.year,  m2, d2)
+
+        if start <= end:
+            # Normaler (nicht jahres­übergreifender) Span → fertig
+            return start, end
+
+        # ─ Jahreswechsel-Span ──────────────────────────────────────
+        # Fall A: wir befinden uns NACH dem Start (z. B. 15. Dez.)
+        if today >= start:
+            end = date(today.year + 1, m2, d2)
+        else:
+            # Fall B: wir befinden uns VOR dem Start (z. B. 10. Jan.)
+            start = date(today.year - 1, m1, d1)
+
+        return start, end
 
 
     def __init__(self, art: str, prefs: Dict[str, Any]):
