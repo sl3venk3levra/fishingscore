@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 import math
 import ephem
-from typing import Final
+from typing import Final, Optional, Tuple, Any
 from zoneinfo import ZoneInfo
 from logging_config import setup_logging
 from basic_sensor import BasicSensor
@@ -42,20 +42,22 @@ def load_weights() -> Dict[str, float]:
     except Exception:
         logger.warning("Fehler beim Laden der Gewichtungen, verwende Fallback")
         return {
-            "Saison":             8,
-            "Temperatur":        15,
-            "Wassertiefe":       10,
+            "Temperatur":        18,
             "TempTiefe_Match":   15,
-            "Tageszeitfenster":  12,
-            "Nacht_Boost":        6,
-            "Luftdruck_trend":    6,
-            "Windrichtung":       3,
+            "Wassertiefe":       12,
+            "Saison":            10,
+            "Tageszeitfenster":  10,
+
+            "Bewölkung":          6,
+            "Windrichtung":       5,
             "Windig":             4,
-            "Bewölkung":          4,
-            "Regen_Bonus":        4,
-            "Regen_Malus":        4,
-            "Mondphase":          4,
-            "Trübung":            4
+            "Luftdruck_trend":    4,
+
+            "Trübung":            4,
+            "Regen_Bonus":        3,
+            "Regen_Malus":        3,
+
+            "Mondphase":          3
         }
 
 
@@ -83,9 +85,9 @@ HALF_MOONS = {"Zunehmender Mond", "Abnehmender Mond"}
 # Hilfsfunktionen
 # -----------------------------------------------------------------------
 
-def _dt(date_: datetime, hours: float) -> datetime:
-    """Hilfsfunktion: date_ + hours (Positiv = vorwärts, Negativ = rückwärts)."""
-    return date_ + timedelta(hours=hours)
+def _dt(dt: Optional[datetime], hours: float = 0.0) -> Optional[datetime]:
+    return None if dt is None else dt + timedelta(hours=hours)
+
 
 def _clamp(val: float, low: float, high: float) -> float:
     """Begrenzt val auf das Intervall [low, high]."""
@@ -435,8 +437,8 @@ def light_modifier(cloud: float, wind: float, precip: float) -> float:
 # Dynamische Zeitfenster
 # -----------------------------------------------------------------------
 def build_time_windows(
-    sunrise: datetime,
-    sunset:  datetime,
+    sunrise: Optional[datetime],
+    sunset:  Optional[datetime],
     prefs:   list[str],
     *,
     cloud:  float,
@@ -444,34 +446,37 @@ def build_time_windows(
     precip: float,
 ) -> dict[str, tuple[datetime, datetime]]:
     """
-    Liefert (start, end)-Tupel für gewünschte Tageszeiten.
-    Puffer werden dynamisch nach Licht­verhältnissen erweitert/
-    verkürzt.  start < end gilt immer, auch über Mitternacht.
+    Erzeugt (start, end)-Tupel für Morgen/Abend/Tag/Nacht.
+    Berechnet nur Fenster, für die genügend Zeitdaten vorliegen.
     """
-    # 1) Lichtpegel bestimmen (0 dunkel – 1 hell)
-    L = light_modifier(cloud, wind, precip)
+    if sunrise is None and sunset is None:
+        return {}                             # nichts berechenbar
 
-    # 2) Basis-Puffer (min)  ➜  h
+    # 1) Lichtpegel (0 dunkel – 1 hell)
+    lm = light_modifier(cloud, wind, precip)
+
+    # 2) dynamische Puffer (min → h)
     buf = BUFFERS
-    dawn   = (buf.get("Dämmerung", 45) * (1 + (1 - L))) / 60
-    daybuf = (buf.get("Tag", 30) * L) / 60
-    nightb = (buf.get("Nacht", 30) * (1 + (1 - L))) / 60
+    dawn   = (buf.get("Dämmerung", 45) * (1 + (1 - lm))) / 60
+    daybuf = (buf.get("Tag", 30)       * lm           ) / 60
+    nightb = (buf.get("Nacht", 30)     * (1 + (1 - lm))) / 60
 
     win: dict[str, tuple[datetime, datetime]] = {}
 
-    if "Morgen" in prefs:
+    if "Morgen" in prefs and sunrise:
         win["Morgen"] = (_dt(sunrise, -dawn), _dt(sunrise,  dawn))
 
-    if "Abend" in prefs:
-        win["Abend"] = (_dt(sunset, -dawn), _dt(sunset,  dawn))
+    if "Abend" in prefs and sunset:
+        win["Abend"] = (_dt(sunset, -dawn),  _dt(sunset,   dawn))
 
-    if "Tag" in prefs:
-        win["Tag"] = (_dt(sunrise,  daybuf), _dt(sunset, -daybuf))
+    if "Tag" in prefs and sunrise and sunset:
+        win["Tag"]   = (_dt(sunrise,  daybuf), _dt(sunset, -daybuf))
 
-    if "Nacht" in prefs:
+    if "Nacht" in prefs and sunrise and sunset:
         s = _dt(sunset,  nightb)
-        e = _dt(sunrise, nightb) + timedelta(days=1)
-        win["Nacht"] = (s, e)
+        e = _dt(sunrise, nightb)
+        if s and e:
+            win["Nacht"] = (s, e + timedelta(days=1))   # über Mitternacht
 
     return win
 
@@ -495,15 +500,9 @@ def score_time_of_day(now: datetime,
     logger.debug(f"[Score-Tageszeit] Zeitfenster: { {k: (s.strftime('%H:%M'), e.strftime('%H:%M')) for k, (s, e) in wins.items()} }")
     for typ, (s, e) in wins.items():
         if time_in_window(now, s, e):
-            logger.debug(f"[Score-Tageszeit] {typ}: Im Zeitfenster! +{ws.get('Tageszeitfenster', 0)} Punkte")
-            sc += ws.get("Tageszeitfenster", 0) * light_modifier(cloud, wind, precip)
+            sc += ws.get("Tageszeitfenster", 0) * max(0.4, light_modifier(cloud, wind, precip))
         elif time_in_window(now, s - half, s) or time_in_window(now, e, e + half):
-            logger.debug(f"[Score-Tageszeit] {typ}: Am Rand des Zeitfensters! +{ws.get('Tageszeitfenster', 0)*0.5} Punkte")
-            sc += ws.get("Tageszeitfenster", 0) * light_modifier(cloud, wind, precip)
-    # Nacht-Bonus immer ZUSÄTZLICH!
-    if "Nacht" in prefs and "Nacht" in wins and time_in_window(now, *wins["Nacht"]):
-        logger.debug(f"[Score-Tageszeit] Nachtfenster aktiv! +{ws.get('Nacht_Boost', 0)} Punkte")
-        sc += ws.get("Nacht_Boost", 0)
+            sc += ws.get("Tageszeitfenster", 0) * max(0.4, light_modifier(cloud, wind, precip))
     return sc, wins
 
 
@@ -691,17 +690,13 @@ def compute_catch_probability_and_window(
             for k, (s, e) in window.items()
         }
 
-        # 11) Nacht-Boost
-        if is_night and "Nacht" in pref.get("Bevorzugte_Tageszeit", []):
-            score += WEIGHTS.get("Nacht_Boost", 0)
-
-        # 12) Finale Prozent + Regen-Malus
+        # 11) Finale Prozent + Regen-Malus
         raw_prob   = round_to_next_five(score / total_weight * 100)
         final_prob = max(10, raw_prob) if score > 0 else 0
         if prec > 5:
             final_prob = max(0, final_prob - WEIGHTS.get("Regen_Malus", 0))
 
-        # 13) Ergebnis anhängen
+        # 12) Ergebnis anhängen
         rec["Fangwahrscheinlichkeit_%"] = final_prob
         rec["Tipps"]        = " · ".join(tipps_txt) if tipps_txt else "Alles optimal – Rute raus!"
         rec["Verbesserungen"] = improve
@@ -714,24 +709,48 @@ def compute_catch_probability_and_window(
 # -----------------------------------------------------------------------
 # Sonnenzeiten & Main
 # -----------------------------------------------------------------------
-def get_sun_times(lat: str, lon: str, tz_name: str) -> Tuple[Optional[datetime], Optional[datetime]]:
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+import ephem, logging
+logger = logging.getLogger(__name__)
+
+def get_sun_times(lat: str, lon: str, tz_name: str) -> tuple[datetime|None, datetime|None]:
     obs = ephem.Observer()
-    obs.lat = lat; obs.lon = lon; obs.date = datetime.utcnow()
-    sun = ephem.Sun(); now = obs.date
+    obs.lat = lat
+    obs.lon = lon
+    # ephem braucht weiter ein ephem.Date – ok so:
+    obs.date = ephem.Date(datetime.now(timezone.utc))
+
+    sun = ephem.Sun()
+    now_dt = datetime.now(timezone.utc)     # >>> Aware-datetime für alle Vergleiche <<<
+
+    # ---------------- Sunrise ----------------
     try:
         sr = obs.previous_rising(sun, use_center=True)
-        if now < sr: sr = obs.next_rising(sun, use_center=True)
-    except:
-        sr = None
+        sr_dt = sr.datetime().replace(tzinfo=timezone.utc)
+        if now_dt < sr_dt:                          # nur datetime Objekte hier!
+            sr = obs.next_rising(sun, use_center=True)
+            sr_dt = sr.datetime().replace(tzinfo=timezone.utc)
+    except Exception as e:
+        logger.warning(f"sunrise error: {e}")
+        sr_dt = None
+
+    # ---------------- Sunset -----------------
     try:
         ss = obs.previous_setting(sun, use_center=True)
-        if now > ss: ss = obs.next_setting(sun, use_center=True)
-    except:
-        ss = None
-    def to_local(ed: Optional[ephem.Date]) -> Optional[datetime]:
-        if ed is None: return None
-        return ed.datetime().replace(tzinfo=timezone.utc).astimezone(ZoneInfo(tz_name))
-    return to_local(sr), to_local(ss)
+        ss_dt = ss.datetime().replace(tzinfo=timezone.utc)
+        if (now_dt - ss_dt) > timedelta(hours=8):   # ebenfalls nur datetime
+            ss = obs.next_setting(sun, use_center=True)
+            ss_dt = ss.datetime().replace(tzinfo=timezone.utc)
+    except Exception as e:
+        logger.warning(f"sunset error: {e}")
+        ss_dt = None
+
+    # ---------- in lokale TZ umwandeln -------
+    to_local = lambda dt: dt.astimezone(ZoneInfo(tz_name)) if dt else None
+    return to_local(sr_dt), to_local(ss_dt)
+
+
 
 
 def main() -> List[Dict[str, Any]]:

@@ -13,6 +13,9 @@ import json
 import signal
 import sys
 from typing import Dict, Any
+# ---------------------------------------------
+import unicodedata, re             # >>> neu
+# ---------------------------------------------
 
 from dotenv import load_dotenv
 import paho.mqtt.client as mqtt
@@ -39,6 +42,16 @@ BASE_TOPIC     = f"{DISCOVERY_ROOT}/sensor/fisch"
 LOOP_INTERVAL  = int(os.getenv("LOOP_INTERVAL", 600))   # Sekunden
 
 log.debug("→ Verbinde zu MQTT-Broker %r:%s", BROKER, PORT)
+
+# ---------------------------------------------------------------------------
+# Hilfsfunktion: ASCII-Slug erzeugen (ä→ae, ö→oe, ü→ue, ß→ss …)
+# ---------------------------------------------------------------------------
+def slugify(txt: str) -> str:                          # >>> neu
+    txt = (unicodedata.normalize("NFKD", txt)
+           .encode("ascii", "ignore")
+           .decode("ascii"))
+    txt = re.sub(r"[^a-z0-9_]", "_", txt.lower())
+    return re.sub(r"_+", "_", txt).strip("_")
 
 # ---------------------------------------------------------------------------
 # MQTT-Client initialisieren (MQTT v5 + Callback-API v2)
@@ -96,16 +109,18 @@ def publish_discovery(art: str) -> None:
       • Tipps-Sensor    (…/<fisch>/todo/config)
     Wird pro Topic nur einmal aufgerufen.
     """
+    slug = slugify(art)                                   # >>> neu
+
     # ─ Prozent-Sensor ───────────────────────────────────────────────────────
-    topic = f"{BASE_TOPIC}/{art.lower()}/config"
+    topic = f"{BASE_TOPIC}/{slug}/config"                 # >>> geändert
     if topic not in _published_config:
         _published_config.add(topic)
 
         cfg: Dict[str, Any] = {
             "name":                f"{art}-Sensor",
-            "unique_id":           f"fischsensor_{art.lower()}",
-            "state_topic":         f"{BASE_TOPIC}/{art.lower()}/state",
-            "json_attributes_topic": f"{BASE_TOPIC}/{art.lower()}/attributes",
+            "unique_id":           f"fischsensor_{slug}", # >>> geändert
+            "state_topic":         f"{BASE_TOPIC}/{slug}/state",   # >>> geändert
+            "json_attributes_topic": f"{BASE_TOPIC}/{slug}/attributes",  # >>> geändert
             "icon":                "mdi:fish",
             "unit_of_measurement": "%",
             "state_class":         "measurement",
@@ -123,20 +138,20 @@ def publish_discovery(art: str) -> None:
         log.info("→ Discovery publiziert (Status) für %s", art)
 
     # ─ Tipps-Sensor ─────────────────────────────────────────────────────────
-    todo_topic = f"{BASE_TOPIC}/{art.lower()}/todo/config"
+    todo_topic = f"{BASE_TOPIC}/{slug}/todo/config"       # >>> geändert
     if todo_topic in _published_config:
         return
     _published_config.add(todo_topic)
 
     todo_cfg: Dict[str, Any] = {
         "name":             f"{art}-Tipps",
-        "unique_id":        f"fischsensor_{art.lower()}_todo",
-        "state_topic":      f"{BASE_TOPIC}/{art.lower()}/todo",
-        "json_attributes_topic": f"{BASE_TOPIC}/{art.lower()}/todo",  # >>> neu
+        "unique_id":        f"fischsensor_{slug}_todo",   # >>> geändert
+        "state_topic":      f"{BASE_TOPIC}/{slug}/todo",  # >>> geändert
+        "json_attributes_topic": f"{BASE_TOPIC}/{slug}/todo",  # >>> neu
         "icon":             "mdi:lightbulb-on-outline",
         "device_class":     "diagnostic",
         "entity_category":  "diagnostic",
-        "value_template":   "{{ value_json.todo_count }}",            # >>> neu
+        "value_template":   "{{ value_json.todo_count }}",
         "device": {
             "identifiers":  ["fischsensor"],
         },
@@ -155,7 +170,7 @@ def publish_data(art: str, entry: Dict[str, Any]) -> None:
       • Prozent-Status          → state
       • Fang-Tipps (JSON)       → todo
     """
-    base = f"{BASE_TOPIC}/{art.lower()}"
+    base = f"{BASE_TOPIC}/{slugify(art)}"                 # >>> geändert
 
     # 1) Attribute
     client.publish(
@@ -176,7 +191,7 @@ def publish_data(art: str, entry: Dict[str, Any]) -> None:
     log.info("→ Status gesendet & retained für %s (%s %%)",
              art, entry.get("Fangwahrscheinlichkeit_%", 0))
 
-    # 3) Tipps-Sensor  (jetzt JSON statt Plaintext)  # >>> geändert
+    # 3) Tipps-Sensor (JSON)
     todo_payload = {
         "todo_count":     len(entry.get("Verbesserungen", {})),
         "tipps_text":     entry.get("Tipps"),
