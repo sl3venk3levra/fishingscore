@@ -1,76 +1,67 @@
 # =============================================================
 # mqtt.py – FISCHIS MQTT-Publisher + Forecast-Integration
 # Publisht pro Fisch:
-#   • % Fangwahrscheinlichkeit  →  …/<fisch>/state
-#   • komplette Attribute      →  …/<fisch>/attributes
-#   • Fang-Tipps (JSON)        →  …/<fisch>/todo
-#   • Forecast (morgen)        →  …/fisch_forecast/<fisch>/* (separates Topic)
+#   • % Fangwahrscheinlichkeit    → …/<fisch>/state
+#   • komplette Attribute         → …/<fisch>/attributes
+#   • Fang-Tipps (JSON)           → …/<fisch>/todo
+#   • Forecast (morgen)           → …/fisch_forecast/<fisch>/*
+#   • Top-N-Sensoren („die_drei_besten“)  → …/sensor/die_drei_besten/rang_<i>/*
 # =============================================================
 
-import os
-import time
-import logging
-import json
-import signal
-import sys
+from __future__ import annotations
+import os, time, logging, json, signal, sys, unicodedata, re
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from typing import Dict, Any, List
-# ---------------------------------------------
-import unicodedata, re             # Slug-Helfer
-# ---------------------------------------------
 
 from dotenv import load_dotenv
 import paho.mqtt.client as mqtt
 from sensor_berechnung import main as load_and_process
-from forecast_morgen import forecast_for_tomorrow        # ← NEU
-
-# ---------------------------------------------------------------------------
-# Logging & Umgebungs­variablen
-# ---------------------------------------------------------------------------
+from forecast_morgen import forecast_for_tomorrow
 from logging_config import setup_logging
 
-load_dotenv()          # .env zuerst laden, damit LOG_LEVEL greift
-setup_logging()        # Logging gemäß LOG_LEVEL konfigurieren
+# ---------------------------------------------------------------------------
+# Logging & Env
+# ---------------------------------------------------------------------------
+load_dotenv()
+setup_logging()
 log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# MQTT-Einstellungen (per .env übersteuerbar)
+# MQTT & Config
 # ---------------------------------------------------------------------------
-BROKER         = os.getenv("MQTT_BROKER", "127.0.0.1")
-PORT           = int(os.getenv("MQTT_PORT", 1883))
-USER           = os.getenv("MQTT_USER")
-PASSWORD       = os.getenv("MQTT_PASS")
-DISCOVERY_ROOT = os.getenv("MQTT_DISCOVERY_PREFIX", "homeassistant")
-BASE_TOPIC     = f"{DISCOVERY_ROOT}/sensor/fisch"
-FORECAST_BASE_TOPIC = f"{DISCOVERY_ROOT}/sensor/fisch_forecast"   # ← NEU
-LOOP_INTERVAL  = int(os.getenv("LOOP_INTERVAL", 600))   # Sekunden
+BROKER               = os.getenv("MQTT_BROKER", "127.0.0.1")
+PORT                 = int(os.getenv("MQTT_PORT", 1883))
+USER                 = os.getenv("MQTT_USER")
+PASSWORD             = os.getenv("MQTT_PASS")
+DISCOVERY_ROOT       = os.getenv("MQTT_DISCOVERY_PREFIX", "homeassistant")
+BASE_TOPIC           = f"{DISCOVERY_ROOT}/sensor/fisch"
+FORECAST_BASE_TOPIC  = f"{DISCOVERY_ROOT}/sensor/fisch_forecast"
+BEST3_TOPIC          = f"{DISCOVERY_ROOT}/sensor/die_drei_besten"
+LOOP_INTERVAL        = int(os.getenv("LOOP_INTERVAL", 600))
+NEXT_FISH_COUNT      = int(os.getenv("NEXT_FISH_COUNT", "0"))
+_TZ                  = ZoneInfo(os.getenv("TZ", "Europe/Berlin"))
+
+# Tracker für schon publizierte Discovery-Topics
+_published_config: set[str] = set()
+_published_best3: set[str] = set()
 
 log.debug("→ Verbinde zu MQTT-Broker %r:%s", BROKER, PORT)
 
 # ---------------------------------------------------------------------------
-# Hilfsfunktion: ASCII-Slug erzeugen (ä→ae, ö→oe, ü→ue, ß→ss …)
+# Slug-Helfer
 # ---------------------------------------------------------------------------
-
 def slugify(txt: str) -> str:
-    txt = (
-        unicodedata.normalize("NFKD", txt)
-        .encode("ascii", "ignore")
-        .decode("ascii")
-    )
+    txt = unicodedata.normalize("NFKD", txt).encode("ascii", "ignore").decode("ascii")
     txt = re.sub(r"[^a-z0-9_]", "_", txt.lower())
     return re.sub(r"_+", "_", txt).strip("_")
 
 # ---------------------------------------------------------------------------
-# MQTT-Client initialisieren (MQTT v5 + Callback-API v2)
+# MQTT-Client
 # ---------------------------------------------------------------------------
-client = mqtt.Client(
-    protocol=mqtt.MQTTv5,
-    callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
-)
-
+client = mqtt.Client(protocol=mqtt.MQTTv5, callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
 if USER:
     client.username_pw_set(USER, PASSWORD)
-
-# ─ Callback-Handler ────────────────────────────────────────────────────────
 
 def on_connect(client, userdata, flags, reason_code, properties):
     if reason_code == 0:
@@ -78,22 +69,14 @@ def on_connect(client, userdata, flags, reason_code, properties):
     else:
         log.error("❌ Verbindung fehlgeschlagen (Reason: %s)", reason_code)
 
-
 def on_publish(client, userdata, mid, reason_code, properties):
     if reason_code == 0:
         log.debug("→ Nachricht %s erfolgreich veröffentlicht", mid)
     else:
-        log.warning(
-            "→ Nachricht %s Veröffentlichung fehlgeschlagen (Reason: %s)",
-            mid,
-            reason_code,
-        )
-
+        log.warning("→ Nachricht %s Veröffentlichung fehlgeschlagen (Reason: %s)", mid, reason_code)
 
 client.on_connect = on_connect
 client.on_publish = on_publish
-
-# ─ Graceful-Shutdown-Handler ───────────────────────────────────────────────
 
 def _graceful_exit(signum, frame):
     log.info("Shutdown-Signal (%s) empfangen – MQTT sauber beenden …", signum)
@@ -103,45 +86,30 @@ def _graceful_exit(signum, frame):
     finally:
         sys.exit(0)
 
-
 signal.signal(signal.SIGTERM, _graceful_exit)
-signal.signal(signal.SIGINT, _graceful_exit)
+signal.signal(signal.SIGINT,  _graceful_exit)
 
-# ─ Verbindung aufbauen & Netzwerk-Thread starten ──────────────────────────
 client.connect(BROKER, PORT, keepalive=60)
 client.loop_start()
 
 # ---------------------------------------------------------------------------
-# Discovery & Daten-Publishing
+# Discovery & Data-Publishing für Einzel-Fische
 # ---------------------------------------------------------------------------
-_published_config: set[str] = set()
-
-
 def _topic_base(slug: str, forecast: bool) -> str:
-    """Liefert den Topic-Prefix für Status/Attribute/Todo."""
-    root = FORECAST_BASE_TOPIC if forecast else BASE_TOPIC
-    return f"{root}/{slug}"
-
+    return f"{FORECAST_BASE_TOPIC if forecast else BASE_TOPIC}/{slug}"
 
 def publish_discovery(art: str, *, forecast: bool = False) -> None:
-    """Veröffentlicht Home-Assistant-Discovery-Blöcke (Status + Todo)."""
     raw_slug = slugify(art)
-    slug = f"{raw_slug}_tomorrow" if forecast else raw_slug
+    slug     = f"{raw_slug}_tomorrow" if forecast else raw_slug
+    base     = _topic_base(slug, forecast)
 
-    base = _topic_base(slug, forecast)
-
-    # Namens-/ID-Suffixe
-    name_suffix = " Morgen" if forecast else ""
-    uid_suffix = "_tomorrow" if forecast else ""
-
-    # ─ Prozent-Sensor ────────────────────────────────────────────────────
-    topic = f"{base}/config"
-    if topic not in _published_config:
-        _published_config.add(topic)
-
-        cfg: Dict[str, Any] = {
-            "name": f"{art}{name_suffix}",
-            "unique_id": f"fischsensor_{raw_slug}{uid_suffix}",
+    # Prozent-Sensor
+    cfg_topic = f"{base}/config"
+    if cfg_topic not in _published_config:
+        _published_config.add(cfg_topic)
+        cfg = {
+            "name": f"{art}{' Morgen' if forecast else ''}",
+            "unique_id": f"fischsensor_{raw_slug}{'_tomorrow' if forecast else ''}",
             "state_topic": f"{base}/state",
             "json_attributes_topic": f"{base}/attributes",
             "icon": "mdi:fish",
@@ -155,84 +123,164 @@ def publish_discovery(art: str, *, forecast: bool = False) -> None:
                 "manufacturer": "Eigenentwicklung",
             },
         }
+        client.publish(cfg_topic, json.dumps(cfg, ensure_ascii=False), qos=0, retain=True)
+        log.info("→ Discovery publiziert für %s%s", art, " (Forecast)" if forecast else "")
 
-        client.publish(topic, json.dumps(cfg, ensure_ascii=False), qos=0, retain=True)
-        log.info("→ Discovery publiziert (Status) für %s%s", art, " (Forecast)" if forecast else "")
-
-    # ─ Tipps-Sensor ───────────────────────────────────────────────────────
+    # Tipps-Sensor
     todo_topic = f"{base}/todo/config"
-    if todo_topic in _published_config:
-        return
-    _published_config.add(todo_topic)
-
-    todo_cfg: Dict[str, Any] = {
-        "name": f"{art}{name_suffix}-Tipps",
-        "unique_id": f"fischsensor_{raw_slug}{uid_suffix}_todo",
-        "state_topic": f"{base}/todo",
-        "json_attributes_topic": f"{base}/todo",
-        "icon": "mdi:lightbulb-on-outline",
-        "device_class": "diagnostic",
-        "entity_category": "diagnostic",
-        "value_template": "{{ value_json.todo_count }}",
-        "device": {
-            "identifiers": ["fischsensor"],
-        },
-    }
-
-    client.publish(todo_topic, json.dumps(todo_cfg, ensure_ascii=False), qos=0, retain=True)
-    log.info("→ Discovery publiziert (Tipps) für %s%s", art, " (Forecast)" if forecast else "")
-
-
-# ---------------------------------------------------------------------------
+    if todo_topic not in _published_config:
+        _published_config.add(todo_topic)
+        todo_cfg = {
+            "name": f"{art}{' Morgen' if forecast else ''}-Tipps",
+            "unique_id": f"fischsensor_{raw_slug}{'_tomorrow' if forecast else ''}_todo",
+            "state_topic": f"{base}/todo",
+            "json_attributes_topic": f"{base}/todo",
+            "icon": "mdi:lightbulb-on-outline",
+            "device_class": "diagnostic",
+            "entity_category": "diagnostic",
+            "value_template": "{{ value_json.todo_count }}",
+            "device": {"identifiers": ["fischsensor"]},
+        }
+        client.publish(todo_topic, json.dumps(todo_cfg, ensure_ascii=False), qos=0, retain=True)
+        log.info("→ Tipps-Discovery publiziert für %s%s", art, " (Forecast)" if forecast else "")
 
 def publish_data(art: str, entry: Dict[str, Any], *, forecast: bool = False) -> None:
-    """Publisht Status, Attribute und Tipps für Today- oder Forecast-Eintrag."""
-
     slug = slugify(art) + ("_tomorrow" if forecast else "")
     base = _topic_base(slug, forecast)
-
-    # 1) Attribute
-    client.publish(
-        f"{base}/attributes",
-        json.dumps(entry, ensure_ascii=False),
-        qos=0,
-        retain=True,
-    )
-    log.debug("🛈 Attributes gesendet & retained für %s%s", art, " (Forecast)" if forecast else "")
-
-    # 2) Status-Prozent
-    client.publish(
-        f"{base}/state",
-        json.dumps({"status": entry.get("Fangwahrscheinlichkeit_%", 0)}),
-        qos=0,
-        retain=True,
-    )
-    log.info(
-        "→ Status gesendet & retained für %s%s (%s %%)",
-        art,
-        " (Forecast)" if forecast else "",
-        entry.get("Fangwahrscheinlichkeit_%", 0),
-    )
-
-    # 3) Tipps-Sensor (JSON)
-    todo_payload = {
+    # Attribute
+    client.publish(f"{base}/attributes", json.dumps(entry, ensure_ascii=False), qos=0, retain=True)
+    # Status
+    client.publish(f"{base}/state", json.dumps({"status": entry.get("Fangwahrscheinlichkeit_%", 0)}),
+                   qos=0, retain=True)
+    # Tipps
+    todo = {
         "todo_count": len(entry.get("Verbesserungen", {})),
         "tipps_text": entry.get("Tipps"),
         "verbesserungen": entry.get("Verbesserungen", {}),
     }
-    client.publish(
-        f"{base}/todo",
-        json.dumps(todo_payload, ensure_ascii=False),
-        qos=0,
-        retain=True,
-    )
-    log.debug(
-        "🛈 Tipps gesendet & retained für %s%s (offen: %s)",
-        art,
-        " (Forecast)" if forecast else "",
-        todo_payload["todo_count"],
+    client.publish(f"{base}/todo", json.dumps(todo, ensure_ascii=False), qos=0, retain=True)
+
+# ---------------------------------------------------------------------------
+# Top-N Hilfsroutinen
+# ---------------------------------------------------------------------------
+def _next_window_start(entry: Dict[str, Any]) -> timedelta:
+    now = datetime.now(_TZ)
+    shortest = timedelta(days=999)
+    fenster = entry.get("Bestes_Fangfenster", {})
+    iterable = fenster.values() if isinstance(fenster, dict) else fenster if isinstance(fenster, list) else []
+    for val in iterable:
+        if isinstance(val, (list, tuple)) and val:
+            start_str = val[0]
+        else:
+            continue
+        try:
+            hh, mm = map(int, start_str.split(":", 1))
+            start = datetime(now.year, now.month, now.day, hh, mm, tzinfo=_TZ)
+            if start < now:
+                start += timedelta(days=1)
+            shortest = min(shortest, start - now)
+        except Exception:
+            continue
+    return shortest
+
+def _in_current_window(entry: Dict[str, Any]) -> bool:
+    now = datetime.now(_TZ)
+    fenster = entry.get("Bestes_Fangfenster", {})
+    iterable = fenster.values() if isinstance(fenster, dict) else fenster if isinstance(fenster, list) else []
+    for val in iterable:
+        if isinstance(val, (list, tuple)) and len(val) >= 2:
+            start_str, end_str = val[0], val[1]
+        else:
+            continue
+        try:
+            hh1, mm1 = map(int, start_str.split(":", 1))
+            hh2, mm2 = map(int, end_str.split(":", 1))
+            start = datetime(now.year, now.month, now.day, hh1, mm1, tzinfo=_TZ)
+            end = datetime(now.year, now.month, now.day, hh2, mm2, tzinfo=_TZ)
+            # über Mitternacht?
+            if end <= start:
+                if now >= start or now <= end:
+                    return True
+            else:
+                if start <= now <= end:
+                    return True
+        except Exception:
+            continue
+    return False
+
+def compute_sorted(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return sorted(
+        entries,
+        key=lambda e: (
+            -e.get("Fangwahrscheinlichkeit_%", 0),
+            0 if _in_current_window(e) else 1,
+            _next_window_start(e),
+        )
     )
 
+def publish_top3(best3: List[Dict[str, Any]]) -> None:
+    for idx, b in enumerate(best3, start=1):
+        art       = b.get("Art", "unbekannt")
+
+        score     = b.get("Fangwahrscheinlichkeit_%", 0)
+        fenster   = b.get("Bestes_Fangfenster", {})
+
+        base      = f"{BEST3_TOPIC}/rang_{idx}"
+        cfg_topic = f"{base}/config"
+
+        if cfg_topic not in _published_best3:
+            _published_best3.add(cfg_topic)
+            cfg = {
+                "name":      f"Top {idx}: {art}",
+                "unique_id": f"fischsensor_top_{idx}",
+                "state_topic": f"{base}/state",
+                "json_attributes_topic": f"{base}/attributes",
+                "icon":        "mdi:trophy",
+                "unit_of_measurement": "%",
+                "state_class":  "measurement",
+                "value_template":"{{ value_json.status | float }}",
+                "device":      {"identifiers": ["fischsensor"]},
+            }
+            client.publish(cfg_topic, json.dumps(cfg, ensure_ascii=False), qos=0, retain=True)
+            log.info("→ Discovery publiziert (Top %d: %s)", idx, art)
+
+        client.publish(f"{base}/state", json.dumps({"status": score}), qos=0, retain=True)
+        client.publish(f"{base}/attributes",
+                       json.dumps({"art": art, "score": score, "fenster": fenster}, ensure_ascii=False),
+                       qos=0, retain=True)
+        log.info("→ Top-%d-Sensor aktualisiert (%s: %s%%)", idx, art, score)
+
+def publish_additional(sorted_entries: List[Dict[str, Any]]) -> None:
+    for offset, b in enumerate(sorted_entries[3:3 + NEXT_FISH_COUNT], start=4):
+        art       = b.get("Art", "unbekannt")
+
+        score     = b.get("Fangwahrscheinlichkeit_%", 0)
+        fenster   = b.get("Bestes_Fangfenster", {})
+
+        base      = f"{BEST3_TOPIC}/rang_{offset}"
+        cfg_topic = f"{base}/config"
+
+        if cfg_topic not in _published_best3:
+            _published_best3.add(cfg_topic)
+            cfg = {
+                "name":      f"Top {offset}: {art}",
+                "unique_id": f"fischsensor_top_{offset}",
+                "state_topic":        f"{base}/state",
+                "json_attributes_topic": f"{base}/attributes",
+                "icon":        "mdi:trophy",
+                "unit_of_measurement": "%",
+                "state_class":  "measurement",
+                "value_template":"{{ value_json.status | float }}",
+                "device":      {"identifiers": ["fischsensor"]},
+            }
+            client.publish(cfg_topic, json.dumps(cfg, ensure_ascii=False), qos=0, retain=True)
+            log.info("→ Discovery publiziert (Top %d: %s)", offset, art)
+
+        client.publish(f"{base}/state", json.dumps({"status": score}), qos=0, retain=True)
+        client.publish(f"{base}/attributes",
+                       json.dumps({"art": art, "score": score, "fenster": fenster}, ensure_ascii=False),
+                       qos=0, retain=True)
+        log.info("→ Top-%d-Sensor aktualisiert (%s: %s%%)", offset, art, score)
 
 # ---------------------------------------------------------------------------
 # Hauptschleife
@@ -240,21 +288,24 @@ def publish_data(art: str, entry: Dict[str, Any], *, forecast: bool = False) -> 
 if __name__ == "__main__":
     try:
         while True:
-            # ───── Heutige Messwerte ──────────────────────────────────────
             log.info("Hole verarbeitete Sensordaten (Heute)…")
-            today_entries: List[Dict[str, Any]] = list(load_and_process())
-            for entry in today_entries:
-                art = entry.get("Art", "unbekannt").split(",", 1)[0]
+            today = list(load_and_process())
+            for e in today:
+                art = e.get("Art", "unbekannt").split(",", 1)[0]
                 publish_discovery(art)
-                publish_data(art, entry)
+                publish_data(art, e)
 
-            # ───── Forecast für morgen ────────────────────────────────────
+            sorted_entries = compute_sorted(today)
+            publish_top3(sorted_entries[:3])
+            if NEXT_FISH_COUNT > 0:
+                publish_additional(sorted_entries)
+
             log.info("Berechne Forecast für morgen…")
-            tomorrow_entries = forecast_for_tomorrow()
-            for entry in tomorrow_entries:
-                art = entry.get("Art", "unbekannt").split(",", 1)[0]
+            tomorrow = forecast_for_tomorrow()
+            for e in tomorrow:
+                art = e.get("Art", "unbekannt").split(",", 1)[0]
                 publish_discovery(art, forecast=True)
-                publish_data(art, entry, forecast=True)
+                publish_data(art, e, forecast=True)
 
             log.info("Warte %s s …", LOOP_INTERVAL)
             time.sleep(LOOP_INTERVAL)

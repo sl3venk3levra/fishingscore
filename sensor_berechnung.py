@@ -3,15 +3,15 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
 import math
 import ephem
-from typing import Final, Optional, Tuple, Any
+
 from zoneinfo import ZoneInfo
 from logging_config import setup_logging
 from basic_sensor import BasicSensor
 from math import exp
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Tuple, Final
 
 # -----------------------------------------------------------------------
 # Basiskonfiguration
