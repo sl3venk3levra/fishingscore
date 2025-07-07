@@ -14,8 +14,8 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from typing import Dict, Any, List
 
-from dotenv import load_dotenv
-import paho.mqtt.client as mqtt
+from dotenv import load_dotenv # type: ignore
+import paho.mqtt.client as mqtt # type: ignore
 from sensor_berechnung import main as load_and_process
 from forecast_morgen import forecast_for_tomorrow
 from logging_config import setup_logging
@@ -45,6 +45,7 @@ _TZ                  = ZoneInfo(os.getenv("TZ", "Europe/Berlin"))
 # Tracker für schon publizierte Discovery-Topics
 _published_config: set[str] = set()
 _published_best3: set[str] = set()
+_last_configured: dict[int, str] = {}
 
 log.debug("→ Verbinde zu MQTT-Broker %r:%s", BROKER, PORT)
 
@@ -220,67 +221,83 @@ def compute_sorted(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 def publish_top3(best3: List[Dict[str, Any]]) -> None:
     for idx, b in enumerate(best3, start=1):
-        art       = b.get("Art", "unbekannt")
-
-        score     = b.get("Fangwahrscheinlichkeit_%", 0)
-        fenster   = b.get("Bestes_Fangfenster", {})
+        art     = b.get("Art", "unbekannt")
+        score   = b.get("Fangwahrscheinlichkeit_%", 0)
+        fenster = b.get("Bestes_Fangfenster", {})
 
         base      = f"{BEST3_TOPIC}/rang_{idx}"
         cfg_topic = f"{base}/config"
 
-        if cfg_topic not in _published_best3:
-            _published_best3.add(cfg_topic)
+        # Discovery nur senden, wenn die Art auf diesem Rang gewechselt hat
+        if _last_configured.get(idx) != art:
+            _last_configured[idx] = art
             cfg = {
                 "name":      f"Top {idx}: {art}",
                 "unique_id": f"fischsensor_top_{idx}",
                 "state_topic": f"{base}/state",
                 "json_attributes_topic": f"{base}/attributes",
-                "icon":        "mdi:trophy",
+                "icon": "mdi:trophy",
                 "unit_of_measurement": "%",
-                "state_class":  "measurement",
-                "value_template":"{{ value_json.status | float }}",
-                "device":      {"identifiers": ["fischsensor"]},
+                "state_class": "measurement",
+                "value_template": "{{ value_json.status | float }}",
+                "device": {"identifiers": ["fischsensor"]},
             }
-            client.publish(cfg_topic, json.dumps(cfg, ensure_ascii=False), qos=0, retain=True)
-            log.info("→ Discovery publiziert (Top %d: %s)", idx, art)
+            client.publish(cfg_topic, json.dumps(cfg, ensure_ascii=False),
+                           qos=0, retain=True)
+            log.info("→ Discovery (Top %d) neu publiziert: %s", idx, art)
 
-        client.publish(f"{base}/state", json.dumps({"status": score}), qos=0, retain=True)
+        # State & Attribute immer aktuell
+        client.publish(f"{base}/state",
+                       json.dumps({"status": score}), qos=0, retain=True)
         client.publish(f"{base}/attributes",
-                       json.dumps({"art": art, "score": score, "fenster": fenster}, ensure_ascii=False),
+                       json.dumps({"art": art, "score": score, "fenster": fenster},
+                                  ensure_ascii=False),
                        qos=0, retain=True)
         log.info("→ Top-%d-Sensor aktualisiert (%s: %s%%)", idx, art, score)
 
-def publish_additional(sorted_entries: List[Dict[str, Any]]) -> None:
-    for offset, b in enumerate(sorted_entries[3:3 + NEXT_FISH_COUNT], start=4):
-        art       = b.get("Art", "unbekannt")
 
-        score     = b.get("Fangwahrscheinlichkeit_%", 0)
-        fenster   = b.get("Bestes_Fangfenster", {})
+
+def publish_additional(sorted_entries: List[Dict[str, Any]]) -> None:
+    """
+    Publisht dynamisch Sensoren von Rang 4 bis Rang (3 + NEXT_FISH_COUNT),
+    Discovery-Block nur bei Art-Wechsel.
+    """
+    for offset, b in enumerate(sorted_entries[3 : 3 + NEXT_FISH_COUNT], start=4):
+        art     = b.get("Art", "unbekannt")
+        score   = b.get("Fangwahrscheinlichkeit_%", 0)
+        fenster = b.get("Bestes_Fangfenster", {})
 
         base      = f"{BEST3_TOPIC}/rang_{offset}"
         cfg_topic = f"{base}/config"
 
-        if cfg_topic not in _published_best3:
-            _published_best3.add(cfg_topic)
+        # Discovery neu, wenn Fisch gewechselt hat
+        if _last_configured.get(offset) != art:
+            _last_configured[offset] = art
             cfg = {
                 "name":      f"Top {offset}: {art}",
                 "unique_id": f"fischsensor_top_{offset}",
-                "state_topic":        f"{base}/state",
+                "state_topic": f"{base}/state",
                 "json_attributes_topic": f"{base}/attributes",
-                "icon":        "mdi:trophy",
+                "icon": "mdi:trophy",
                 "unit_of_measurement": "%",
-                "state_class":  "measurement",
-                "value_template":"{{ value_json.status | float }}",
-                "device":      {"identifiers": ["fischsensor"]},
+                "state_class": "measurement",
+                "value_template": "{{ value_json.status | float }}",
+                "device": {"identifiers": ["fischsensor"]},
             }
-            client.publish(cfg_topic, json.dumps(cfg, ensure_ascii=False), qos=0, retain=True)
-            log.info("→ Discovery publiziert (Top %d: %s)", offset, art)
+            client.publish(cfg_topic, json.dumps(cfg, ensure_ascii=False),
+                           qos=0, retain=True)
+            log.info("→ Discovery (Top %d) neu publiziert: %s", offset, art)
 
-        client.publish(f"{base}/state", json.dumps({"status": score}), qos=0, retain=True)
+        # Laufende Daten
+        client.publish(f"{base}/state",
+                       json.dumps({"status": score}), qos=0, retain=True)
         client.publish(f"{base}/attributes",
-                       json.dumps({"art": art, "score": score, "fenster": fenster}, ensure_ascii=False),
+                       json.dumps({"art": art, "score": score, "fenster": fenster},
+                                  ensure_ascii=False),
                        qos=0, retain=True)
         log.info("→ Top-%d-Sensor aktualisiert (%s: %s%%)", offset, art, score)
+
+
 
 # ---------------------------------------------------------------------------
 # Hauptschleife
@@ -298,7 +315,7 @@ if __name__ == "__main__":
             sorted_entries = compute_sorted(today)
             publish_top3(sorted_entries[:3])
             if NEXT_FISH_COUNT > 0:
-                publish_additional(sorted_entries)
+                publish_additional(sorted_entries) # type: ignore
 
             log.info("Berechne Forecast für morgen…")
             tomorrow = forecast_for_tomorrow()
