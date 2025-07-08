@@ -42,6 +42,9 @@ LOOP_INTERVAL        = int(os.getenv("LOOP_INTERVAL", 600))
 NEXT_FISH_COUNT      = int(os.getenv("NEXT_FISH_COUNT", "0"))
 _TZ                  = ZoneInfo(os.getenv("TZ", "Europe/Berlin"))
 
+# ➊  EIN / AUS – Discovery hart neu schicken, egal ob schon bekannt
+FORCE_CONFIG_REFRESH = os.getenv("FORCE_CONFIG_REFRESH", "0") == "1"
+
 # Tracker für schon publizierte Discovery-Topics
 _published_config: set[str] = set()
 _published_best3: set[str] = set()
@@ -219,6 +222,9 @@ def compute_sorted(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         )
     )
 
+# ------------------------------------------------------------
+# Discovery-Config jetzt EINMAL senden, ohne Fisch-Namen
+# ------------------------------------------------------------
 def publish_top3(best3: List[Dict[str, Any]]) -> None:
     for idx, b in enumerate(best3, start=1):
         art     = b.get("Art", "unbekannt")
@@ -228,12 +234,13 @@ def publish_top3(best3: List[Dict[str, Any]]) -> None:
         base      = f"{BEST3_TOPIC}/rang_{idx}"
         cfg_topic = f"{base}/config"
 
-        # Discovery nur senden, wenn die Art auf diesem Rang gewechselt hat
-        if _last_configured.get(idx) != art:
-            _last_configured[idx] = art
+        # → Discovery nur, wenn noch nicht gesendet oder FORCE aktiv ist
+        if FORCE_CONFIG_REFRESH or cfg_topic not in _published_best3:
+            _published_best3.add(cfg_topic)
+
             cfg = {
-                "name":      f"Top {idx}: {art}",
-                "unique_id": f"fischsensor_top_{idx}",
+                "name":        f"Top {idx}",              # ← bleibt immer gleich
+                "unique_id":   f"fischsensor_top_{idx}",  # ← bleibt immer gleich
                 "state_topic": f"{base}/state",
                 "json_attributes_topic": f"{base}/attributes",
                 "icon": "mdi:trophy",
@@ -242,26 +249,36 @@ def publish_top3(best3: List[Dict[str, Any]]) -> None:
                 "value_template": "{{ value_json.status | float }}",
                 "device": {"identifiers": ["fischsensor"]},
             }
-            client.publish(cfg_topic, json.dumps(cfg, ensure_ascii=False),
+            client.publish(cfg_topic,
+                           json.dumps(cfg, ensure_ascii=False),
                            qos=0, retain=True)
-            log.info("→ Discovery (Top %d) neu publiziert: %s", idx, art)
+            log.info("→ Discovery (Top %d) %s: %s",
+                     idx,
+                     "erzwingend aktualisiert" if FORCE_CONFIG_REFRESH else "erstmals gesendet",
+                     art)
 
-        # State & Attribute immer aktuell
+        # Laufende Daten publizieren
         client.publish(f"{base}/state",
-                       json.dumps({"status": score}), qos=0, retain=True)
-        client.publish(f"{base}/attributes",
-                       json.dumps({"art": art, "score": score, "fenster": fenster},
-                                  ensure_ascii=False),
+                       json.dumps({"status": score}),
                        qos=0, retain=True)
-        log.info("→ Top-%d-Sensor aktualisiert (%s: %s%%)", idx, art, score)
+
+        client.publish(f"{base}/attributes",
+                       json.dumps({
+                           "art": art,
+                           "score": score,
+                           "fenster": fenster,
+                           "friendly_name": f"Top {idx}: {art}"
+                       }, ensure_ascii=False),
+                       qos=0, retain=True)
 
 
 
+
+# ------------------------------------------------------------
+# Dynamische Ränge ab Platz 4 (bis 3 + NEXT_FISH_COUNT)
+# Discovery wird EINMAL gesendet, Daten anschließend nur noch aktualisiert
+# ------------------------------------------------------------
 def publish_additional(sorted_entries: List[Dict[str, Any]]) -> None:
-    """
-    Publisht dynamisch Sensoren von Rang 4 bis Rang (3 + NEXT_FISH_COUNT),
-    Discovery-Block nur bei Art-Wechsel.
-    """
     for offset, b in enumerate(sorted_entries[3 : 3 + NEXT_FISH_COUNT], start=4):
         art     = b.get("Art", "unbekannt")
         score   = b.get("Fangwahrscheinlichkeit_%", 0)
@@ -270,12 +287,13 @@ def publish_additional(sorted_entries: List[Dict[str, Any]]) -> None:
         base      = f"{BEST3_TOPIC}/rang_{offset}"
         cfg_topic = f"{base}/config"
 
-        # Discovery neu, wenn Fisch gewechselt hat
-        if _last_configured.get(offset) != art:
-            _last_configured[offset] = art
+        # → Discovery nur, wenn noch nicht gesendet oder FORCE aktiv ist
+        if FORCE_CONFIG_REFRESH or cfg_topic not in _published_best3:
+            _published_best3.add(cfg_topic)
+
             cfg = {
-                "name":      f"Top {offset}: {art}",
-                "unique_id": f"fischsensor_top_{offset}",
+                "name":        f"Top {offset}",               # bleibt immer gleich
+                "unique_id":   f"fischsensor_top_{offset}",   # bleibt immer gleich
                 "state_topic": f"{base}/state",
                 "json_attributes_topic": f"{base}/attributes",
                 "icon": "mdi:trophy",
@@ -284,18 +302,26 @@ def publish_additional(sorted_entries: List[Dict[str, Any]]) -> None:
                 "value_template": "{{ value_json.status | float }}",
                 "device": {"identifiers": ["fischsensor"]},
             }
-            client.publish(cfg_topic, json.dumps(cfg, ensure_ascii=False),
+            client.publish(cfg_topic,
+                           json.dumps(cfg, ensure_ascii=False),
                            qos=0, retain=True)
-            log.info("→ Discovery (Top %d) neu publiziert: %s", offset, art)
+            log.info("→ Discovery (Top %d) %s: %s",
+                     offset,
+                     "erzwingend aktualisiert" if FORCE_CONFIG_REFRESH else "erstmals gesendet",
+                     art)
 
         # Laufende Daten
         client.publish(f"{base}/state",
                        json.dumps({"status": score}), qos=0, retain=True)
         client.publish(f"{base}/attributes",
-                       json.dumps({"art": art, "score": score, "fenster": fenster},
-                                  ensure_ascii=False),
+                       json.dumps({
+                           "art": art,
+                           "score": score,
+                           "fenster": fenster,
+                           "friendly_name": f"Top {offset}: {art}"
+                       }, ensure_ascii=False),
                        qos=0, retain=True)
-        log.info("→ Top-%d-Sensor aktualisiert (%s: %s%%)", offset, art, score)
+
 
 
 
