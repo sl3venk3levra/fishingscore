@@ -1,21 +1,21 @@
 {
   "Bevorzugte_Gewichtungen": {
-    "Temperatur":        18,
-    "TempTiefe_Match":   15,
+    "Temperatur":        28,
+    "TempTiefe_Match":   18,
     "Wassertiefe":       12,
     "Saison":            10,
     "Tageszeitfenster":  10,
 
-    "Bewölkung":          6,
-    "Windrichtung":       5,
-    "Windig":             4,
-    "Luftdruck_trend":    4,
+    "Bewölkung":          4,
+    "Windrichtung":       3,
+    "Windig":             1,
+    "Luftdruck_trend":    5,
 
-    "Trübung":            4,
+    "Trübung":            2,
     "Regen_Bonus":        3,
-    "Regen_Malus":        3,
+    "Regen_Malus":        2,
 
-    "Mondphase":          3
+    "Mondphase":          2
   },
 
   "Zeitfenster_Puffer": { "Dämmerung": 45, "Tag": 25, "Nacht": 30 }
