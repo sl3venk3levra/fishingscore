@@ -1,7 +1,7 @@
 {
   "Bevorzugte_Gewichtungen": {
-    "Temperatur":        28,
-    "TempTiefe_Match":   18,
+    "Temperatur":        18,
+    "TempTiefe_Match":   28,
     "Wassertiefe":       12,
     "Saison":            10,
     "Tageszeitfenster":  10,

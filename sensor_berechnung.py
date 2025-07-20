@@ -558,7 +558,11 @@ def compute_catch_probability_and_window(
         rec["Errechnete_Wassertiefe"]      = parts["actual_depth"]
         rec["TempTiefe_Match"]             = parts["match"]
 
-        score = parts["match_score"]
+        score = (
+            parts["temp_score"]    # Punkte für die Temperatur‑Abweichung
+          + parts["depth_score"]   # Punkte für die Tiefen‑Abweichung
+          + parts["match_score"]   # Bonus, wenn beides zusammen passt
+            )
 
         if not parts["match"]:
             soll_tiefe = _empfohlene_tiefe(pref)
@@ -701,13 +705,19 @@ def compute_catch_probability_and_window(
             for k, (s, e) in window.items()
         }
 
-        # 11) Finale Prozent + Regen-Malus
-        raw_prob   = round_to_next_five(score / total_weight * 100)
-        final_prob = max(10, raw_prob) if score > 0 else 0
+        # 11) Rohe Wahrscheinlichkeit in Vielfachen von 5
+        raw_prob = round_to_next_five(score / total_weight * 100)
+
+        # 12) Finale Wahrscheinlichkeit = raw_prob (kein zusätzlicher Cap/Mindestwert)
+        final_prob = raw_prob if score > 0 else 0
+
+        # 13) Optionaler Regen-Malus
+        prec = rec.get("precipIntensity", 0.0)
         if prec > 5:
             final_prob = max(0, final_prob - WEIGHTS.get("Regen_Malus", 0))
 
-        # 12) Ergebnis anhängen
+
+        # 13) Ergebnis anhängen
         rec["Fangwahrscheinlichkeit_%"] = final_prob
         rec["Tipps"]        = " · ".join(tipps_txt) if tipps_txt else "Alles optimal – Rute raus!"
         rec["Verbesserungen"] = improve
